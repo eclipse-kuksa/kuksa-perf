@@ -1,6 +1,6 @@
-# kuksa-perf
+# Eclipse Kuksa databroker-perf
 
-Performance measurement app for KUKSA databroker
+Performance measurement app for KUKSA databroker.
 
 ```
 [00:00:00]  [========================================================================================================]    1000/1000    iterations
@@ -125,3 +125,15 @@ If running on MacOS:
 ```
 ./target/release/databroker-perf --api sdv.databroker.v1 --config configs/config.json --port 55556
 ```
+
+## Contributing
+
+Please refer to the [Kuksa Contributing Guide](CONTRIBUTING.md).
+
+## License
+
+Kuksa Databroker Perf tool is provided under the terms of the [Apache Software License 2.0](LICENSE).
+
+## Contact
+
+Please feel free to create [GitHub Issues](https://github.com/eclipse-kuksa/kuksa-perf/issues) for reporting bugs and/or ask questions in our [Gitter chat room](https://matrix.to/#/#kuksa-val_community:gitter.im).
