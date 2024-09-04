@@ -242,9 +242,9 @@ checksum = "8318a53db07bb3f8dca91a600466bdb3f2eaadeedfdbcf02e1accbad9271ba50"
 
 [[package]]
 name = "cc"
-version = "1.1.15"
+version = "1.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57b6a275aa2903740dc87da01c62040406b8812552e97129a63ea8850a17c6e6"
+checksum = "e9d013ecb737093c0e86b151a7b837993cf9ec6c502946cfb44bedc392421e0b"
 dependencies = [
  "shlex",
 ]
@@ -358,7 +358,7 @@ dependencies = [
 [[package]]
 name = "databroker-proto"
 version = "0.4.6"
-source = "git+https://github.com/boschglobal/kuksa-databroker.git?branch=prep-rel-0.5.0#ccc382c042be28e015cdfad170e56deb6bacdca6"
+source = "git+https://github.com/boschglobal/kuksa-databroker.git?branch=prep-rel-0.5.0#6c81dbd0ffc4903981b98ba9f3c476bcd46addf8"
 dependencies = [
  "prost",
  "prost-types",
