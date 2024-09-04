@@ -1,0 +1,43 @@
+#********************************************************************************
+# Copyright (c) 2024 Contributors to the Eclipse Foundation
+#
+# See the NOTICE file(s) distributed with this work for additional
+# information regarding copyright ownership.
+#
+# This program and the accompanying materials are made available under the
+# terms of the Apache License 2.0 which is available at
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# SPDX-License-Identifier: Apache-2.0
+#*******************************************************************************/
+
+[package]
+name = "databroker-perf"
+version = "0.3.1"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+databroker-proto = { git = "https://github.com/SoftwareDefinedVehicle/kuksa-databroker.git", branch = "rel-0.5.0", package = "databroker-proto" }
+hdrhistogram = { version = "7.5.4", default-features = false }
+tokio = { version = "1.20", features = ["full"] }
+tokio-stream = { version = "0.1.8" }
+tonic = { version = "0.11.0", default-features = false }
+tonic-build = { version = "0.11.0", default-features = false }
+clap = { version = "4.2", features = [
+    "std",
+    "env",
+    "derive",
+    "help",
+    "error-context",
+    "usage",
+] }
+serde_json = "1.0"
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
+log = "0.4"
+stderrlog = "0.6"
+indicatif = "0.17"
+console = "0.15"

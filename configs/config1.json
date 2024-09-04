@@ -1,0 +1,7 @@
+{
+    "signals": [
+      {
+        "path": "Vehicle.Speed"
+      }
+    ]
+  }
