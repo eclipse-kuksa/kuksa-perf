@@ -38,7 +38,6 @@ pub fn read_config(config_file: Option<&String>) -> Result<Vec<Signal>> {
             // Default set of signals
             Ok(vec![Signal {
                 path: "Vehicle.Cabin.Infotainment.Media.Played.Track".to_owned(),
-                id: None,
             }])
         }
     }

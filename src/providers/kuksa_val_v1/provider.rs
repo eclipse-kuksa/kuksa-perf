@@ -149,7 +149,6 @@ impl ProviderInterface for Provider {
                     }
                     signals_response.push(Signal {
                         path: entry.path.clone(),
-                        id: None,
                     });
                 }
             }

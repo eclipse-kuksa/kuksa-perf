@@ -21,5 +21,4 @@ pub struct Config {
 #[derive(Deserialize, Clone)]
 pub struct Signal {
     pub path: String,
-    pub id: Option<i32>,
 }

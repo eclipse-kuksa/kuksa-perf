@@ -135,7 +135,6 @@ impl ProviderInterface for Provider {
                             .insert(signal_path.clone(), (metadata.id, data_type));
                         signals_response.push(Signal {
                             path: signal_path.clone(),
-                            id: Some(metadata.id),
                         });
                     }
                 }

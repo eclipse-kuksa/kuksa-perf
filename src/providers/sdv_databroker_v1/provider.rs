@@ -136,7 +136,6 @@ impl ProviderInterface for Provider {
                     .insert(entry.name.clone(), (entry.id, entry.data_type()));
                 Signal {
                     path: entry.name.clone(),
-                    id: Some(entry.id),
                 }
             })
             .collect();

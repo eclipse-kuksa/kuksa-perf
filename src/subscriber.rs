@@ -225,16 +225,15 @@ impl Subscriber {
         signals: Vec<Signal>,
         signals_map: Arc<HashMap<String, Sender<Instant>>>,
     ) -> Result<(), Error> {
-        let signal_ids: Vec<kuksa_val_v2::SignalId> = signals
-            .iter()
-            .map(|signal| kuksa_val_v2::SignalId {
-                signal: Some(kuksa_val_v2::signal_id::Signal::Id(signal.id.unwrap())),
-            })
-            .collect();
+        let mut paths = Vec::with_capacity(signals.len());
+        for signal in signals{
+            paths.push(signal.path);
+        }
+           
 
         let mut client = kuksa_val_v2::val_client::ValClient::new(channel);
 
-        let args = tonic::Request::new(kuksa_val_v2::SubscribeRequest { signal_ids });
+        let args = tonic::Request::new(kuksa_val_v2::SubscribeRequest { signal_paths: paths });
 
         match client.subscribe(args).await {
             Ok(response) => {
@@ -288,7 +287,6 @@ mod test {
         let query = Subscriber::query_from_signals(
             vec![Signal {
                 path: "Vehicle.Speed".to_owned(),
-                id: None,
             }]
             .into_iter(),
         );
@@ -301,11 +299,9 @@ mod test {
             vec![
                 Signal {
                     path: "Vehicle.Speed".to_owned(),
-                    id: None,
                 },
                 Signal {
                     path: "Vehicle.Width".to_owned(),
-                    id: None,
                 },
             ]
             .into_iter(),
