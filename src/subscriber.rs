@@ -226,14 +226,15 @@ impl Subscriber {
         signals_map: Arc<HashMap<String, Sender<Instant>>>,
     ) -> Result<(), Error> {
         let mut paths = Vec::with_capacity(signals.len());
-        for signal in signals{
+        for signal in signals {
             paths.push(signal.path);
         }
-           
 
         let mut client = kuksa_val_v2::val_client::ValClient::new(channel);
 
-        let args = tonic::Request::new(kuksa_val_v2::SubscribeRequest { signal_paths: paths });
+        let args = tonic::Request::new(kuksa_val_v2::SubscribeRequest {
+            signal_paths: paths,
+        });
 
         match client.subscribe(args).await {
             Ok(response) => {

@@ -335,6 +335,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
+name = "databroker-perf"
+version = "0.3.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "console",
+ "databroker-proto",
+ "hdrhistogram",
+ "indicatif",
+ "log",
+ "serde",
+ "serde_json",
+ "stderrlog",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tonic-build",
+]
+
+[[package]]
 name = "databroker-proto"
 version = "0.4.6"
 source = "git+https://github.com/boschglobal/kuksa-databroker.git?branch=prep-rel-0.5.0#6c81dbd0ffc4903981b98ba9f3c476bcd46addf8"
@@ -681,27 +702,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1868808506b929d7b0cfa8f75951347aa71bb21144b7791bae35d9bccfcfe37a"
 dependencies = [
  "wasm-bindgen",
-]
-
-[[package]]
-name = "kuksa-perf"
-version = "0.3.1"
-dependencies = [
- "anyhow",
- "clap",
- "console",
- "databroker-proto",
- "hdrhistogram",
- "indicatif",
- "log",
- "serde",
- "serde_json",
- "stderrlog",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tonic",
- "tonic-build",
 ]
 
 [[package]]
