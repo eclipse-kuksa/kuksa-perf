@@ -1,0 +1,54 @@
+# /********************************************************************************
+# * Copyright (c) 2022,2023 Contributors to the Eclipse Foundation
+# *
+# * See the NOTICE file(s) distributed with this work for additional
+# * information regarding copyright ownership.
+# *
+# * This program and the accompanying materials are made available under the
+# * terms of the Apache License 2.0 which is available at
+# * http://www.apache.org/licenses/LICENSE-2.0
+# *
+# * SPDX-License-Identifier: Apache-2.0
+# ********************************************************************************/
+
+name: Run kuksa-databroker-perf
+
+on:
+  push:
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * *"
+
+concurrency:
+      group: ${{ github.ref }}-${{ github.workflow }}-databroker-perf
+      cancel-in-progress: true
+
+jobs:
+  TestRun:
+    name: Run Perftest on latest Databroker
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+            target/
+          key: databroker-perf-lint-${{ hashFiles('**/Cargo.lock') }}
+      - name: "Test behavior"
+        run: |
+          scripts/run-perf.sh | tee perf-result.txt
+      - name: "Uploading  artifacts"
+        uses: actions/upload-artifact@v4
+        with:
+          name: Perf Test Results
+          path: perf-result.txt
+          if-no-files-found: error

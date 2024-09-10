@@ -1,0 +1,10 @@
+{
+    "signals": [
+      {
+        "path": "Vehicle.Speed"
+      },
+      {
+        "path": "Vehicle.TraveledDistance"
+      }
+    ]
+  }

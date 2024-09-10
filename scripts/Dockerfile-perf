@@ -1,0 +1,58 @@
+# /********************************************************************************
+# * Copyright (c) 2022, 2023 Contributors to the Eclipse Foundation
+# *
+# * See the NOTICE file(s) distributed with this work for additional
+# * information regarding copyright ownership.
+# *
+# * This program and the accompanying materials are made available under the
+# * terms of the Apache License 2.0 which is available at
+# * http://www.apache.org/licenses/LICENSE-2.0
+# *
+# * SPDX-License-Identifier: Apache-2.0
+# ********************************************************************************/
+
+# You need to run build-databroker-perf.sh first, for all platforms you want to build
+# the container for as this docker file just collects the artifacts, i.e.
+# $ KUKSA_DATABROKERPERF_SBOM=y ./scripts/build-databroker-perf.sh arm64 amd64 riscv64
+#
+# This Dockerfile is intended to run inside the root directory, i.e.
+# $ docker buildx build --platform linux/amd64 -f scripts/Dockerfile-perf .
+
+# AMD is a statically linked MUSL build
+FROM scratch AS target-amd64
+ENV BUILDTARGET="x86_64-unknown-linux-musl"
+
+# ARM64 is a statically linked GRPC build
+FROM scratch AS target-arm64
+ENV BUILDTARGET="aarch64-unknown-linux-musl"
+
+# RISCV is a glibc build. Rust toolchain not supported for MUSL
+# Normally we prefer "distroless" base images, i.e.:
+# FROM gcr.io/distroless/base-debian12:debug as target-riscv64
+# However, distorless has no RISCV support yet,
+# (Nov 2023). Using debian unstable for now
+FROM riscv64/debian:sid-slim as target-riscv64
+ENV BUILDTARGET="riscv64gc-unknown-linux-gnu"
+
+# Databroker-cli is an interactive cli, thus it can only work correctly
+# if we have some terminfo configurations available. We will transplant
+# them from a donor
+# While writing this, the latest versuion 3.18 does not support riscv yet,
+# but edge does. As we are only getting some config files, this will
+# likely not break
+FROM alpine:edge as terminfo-donor
+RUN apk update && apk add ncurses-terminfo-base
+
+
+# Now adding generic parts
+FROM target-$TARGETARCH as target
+ARG TARGETARCH
+
+COPY ./dist/$TARGETARCH/databroker-perf /app/databroker-perf
+COPY ./dist/$TARGETARCH/sbom.json /app/sbom.json
+COPY ./dist/$TARGETARCH/thirdparty-licenses/ /app/thirdparty-licenses
+
+# Copy terminfo database
+COPY --from=terminfo-donor /etc/terminfo /etc/terminfo
+
+ENTRYPOINT [ "/app/databroker-perf" ]
