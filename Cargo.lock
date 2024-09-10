@@ -358,7 +358,7 @@ dependencies = [
 [[package]]
 name = "databroker-proto"
 version = "0.4.6"
-source = "git+https://github.com/boschglobal/kuksa-databroker.git?branch=prep-rel-0.5.0#6c81dbd0ffc4903981b98ba9f3c476bcd46addf8"
+source = "git+https://github.com/eclipse-kuksa/kuksa-databroker.git?branch=feature/databroker-api-v2#4eee61cb3cf1269b1efa1c54c5ee813b82e27cf5"
 dependencies = [
  "prost",
  "prost-types",
