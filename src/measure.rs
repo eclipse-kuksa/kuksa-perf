@@ -50,7 +50,7 @@ pub struct Provider {
 pub struct MeasurementConfig {
     pub host: String,
     pub port: u64,
-    pub run_seconds: u64,
+    pub duration: u64,
     pub interval: u16,
     pub skip_seconds: u64,
     pub api: Api,
@@ -203,7 +203,7 @@ pub async fn perform_measurement(
                     .unwrap(),
             )
         } else {
-            ProgressBar::new(measurement_config.run_seconds).with_style(
+            ProgressBar::new(measurement_config.duration).with_style(
                 ProgressStyle::with_template(
                     "[{elapsed_precise}] {msg} [{wide_bar}] {pos:>7}/{len:7} seconds",
                 )
@@ -290,7 +290,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
     let mut last_running_hist = Instant::now();
     let start_run = Instant::now();
 
-    let run_milliseconds = ctx.measurement_config.run_seconds * 1000;
+    let run_milliseconds = ctx.measurement_config.duration * 1000;
     let skip_milliseconds = ctx.measurement_config.skip_seconds * 1000;
 
     let mut interval_to_run = if ctx.measurement_config.interval == 0 {

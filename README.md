@@ -3,46 +3,46 @@
 Performance measurement app for KUKSA databroker.
 
 ```
-[00:00:10] Group: Frame 1 | Cycle(ms): 10 | Current latency: 0.519 ms [==============================================================================================================]      10/10      seconds
-[00:00:09] Group: Frame 2 | Cycle(ms): 20 | Current latency: 0.562 ms [==============================================================================================================]      10/10      seconds
-[00:00:09] Group: Frame 3 | Cycle(ms): 30 | Current latency: 0.732 ms [==============================================================================================================]      10/10      seconds
+[00:00:10] Group: Frame 1 | Cycle(ms): 10 | Current latency: 0.519 ms [====================================================================]      6/6      seconds
+[00:00:09] Group: Frame 2 | Cycle(ms): 20 | Current latency: 0.562 ms [====================================================================]      6/6      seconds
+[00:00:09] Group: Frame 3 | Cycle(ms): 30 | Current latency: 0.732 ms [====================================================================]      6/6      seconds
 
 Global Summary:
   API: KuksaValV2
-  Run seconds: 6
-  Skipped run seconds: 2
+  Total elapsed seconds: 6
+  Skipped test seconds: 2
   Total signals: 8 signals
-  Sent: 2275 signal updates
+  Sent: 2283 signal updates
   Skipped: 768 signal updates
-  Received: 1507 signal updates
-  Signal/Second: 376 signal/s
-  95% in under: 0.915 ms
-  Fastest:   0.208 ms
-  Slowest:   3.575 ms
-  Average:   0.623 ms
+  Received: 1515 signal updates
+  Signal/Second: 378 signal/s
+  95% in under: 0.907 ms
+  Fastest:   0.252 ms
+  Slowest:   1.349 ms
+  Average:   0.732 ms
 
 Latency histogram:
-    0.153 ms [38   ] |
-    0.459 ms [759  ] |∎∎∎∎∎∎∎
-    0.765 ms [637  ] |∎∎∎∎∎∎
-    1.071 ms [51   ] |
-    1.377 ms [10   ] |
-    1.683 ms [7    ] |
-    1.989 ms [3    ] |
-    2.295 ms [1    ] |
-    2.601 ms [0    ] |
-    2.907 ms [0    ] |
-    3.213 ms [0    ] |
-    3.519 ms [1    ] |
+    0.248 ms [7    ] |
+    0.347 ms [20   ] |
+    0.446 ms [7    ] |
+    0.545 ms [196  ] |∎
+    0.644 ms [408  ] |∎∎∎∎
+    0.743 ms [378  ] |∎∎∎
+    0.842 ms [292  ] |∎∎
+    0.941 ms [146  ] |∎
+    1.040 ms [47   ] |
+    1.139 ms [9    ] |
+    1.238 ms [4    ] |
+    1.337 ms [1    ] |
 
 Latency distribution:
-  10% in under 0.477 ms
-  25% in under 0.535 ms
-  50% in under 0.596 ms
-  75% in under 0.682 ms
-  90% in under 0.769 ms
-  95% in under 0.908 ms
-  99% in under 1.332 ms
+  10% in under 0.576 ms
+  25% in under 0.621 ms
+  50% in under 0.717 ms
+  75% in under 0.829 ms
+  90% in under 0.915 ms
+  95% in under 0.970 ms
+  99% in under 1.069 ms
 ```
 
 # Local Setup
@@ -89,17 +89,17 @@ If running on MacOS:
 Usage: databroker-perf [OPTIONS]
 
 Options:
-  -r, --run-seconds <RUN_SECONDS>   Number of seconds to run [default: 8]
-      --api <API>                   Api of databroker [default: kuksa.val.v1] [possible values: kuksa.val.v1, kuksa.val.v2, sdv.databroker.v1]
-      --host <HOST>                 Host address of databroker [default: http://127.0.0.1]
-      --port <PORT>                 Port of databroker [default: 55555]
-      --skip-seconds <RUN_SECONDS>  Seconds to run (skip) before measuring the latency [default: 4]
-      --detailed-output             Print more details in the summary result
-      --test-data-file <FILE>       Path to test data file
-      --run-forever                 Run the measurements forever (until receiving a shutdown signal)
-  -v, --verbosity <LEVEL>           Verbosity level. Can be one of ERROR, WARN, INFO, DEBUG, TRACE [default: WARN]
-  -h, --help                        Print help
-  -V, --version                     Print version
+  -d, --duration <DURATION>      Number of seconds to run [default: 8]
+      --api <API>                Api of databroker [default: kuksa.val.v1] [possible values: kuksa.val.v1, kuksa.val.v2, sdv.databroker.v1]
+      --host <HOST>              Host address of databroker [default: http://127.0.0.1]
+      --port <PORT>              Port of databroker [default: 55555]
+      --skip-seconds <DURATION>  Seconds to run (skip) before measuring the latency [default: 4]
+      --detailed-output          Print more details in the summary result
+      --test-data-file <FILE>    Path to test data file
+      --run-forever              Run the measurements forever (until receiving a shutdown signal)
+  -v, --verbosity <LEVEL>        Verbosity level. Can be one of ERROR, WARN, INFO, DEBUG, TRACE [default: WARN]
+  -h, --help                     Print help
+  -V, --version                  Print version
 ```
 
 ```
@@ -112,40 +112,40 @@ By default, the group results output will be summarised and contracted as follow
 ```
 Global Summary:
   API: KuksaValV2
-  Run seconds: 6
-  Skipped run seconds: 2
+  Total elapsed seconds: 6
+  Skipped test seconds: 2
   Total signals: 8 signals
-  Sent: 2275 signal updates
+  Sent: 2283 signal updates
   Skipped: 768 signal updates
-  Received: 1507 signal updates
-  Signal/Second: 376 signal/s
-  95% in under: 0.915 ms
-  Fastest:   0.208 ms
-  Slowest:   3.575 ms
-  Average:   0.623 ms
+  Received: 1515 signal updates
+  Signal/Second: 378 signal/s
+  95% in under: 0.907 ms
+  Fastest:   0.252 ms
+  Slowest:   1.349 ms
+  Average:   0.732 ms
 
 Latency histogram:
-    0.153 ms [38   ] |
-    0.459 ms [759  ] |∎∎∎∎∎∎∎
-    0.765 ms [637  ] |∎∎∎∎∎∎
-    1.071 ms [51   ] |
-    1.377 ms [10   ] |
-    1.683 ms [7    ] |
-    1.989 ms [3    ] |
-    2.295 ms [1    ] |
-    2.601 ms [0    ] |
-    2.907 ms [0    ] |
-    3.213 ms [0    ] |
-    3.519 ms [1    ] |
+    0.248 ms [7    ] |
+    0.347 ms [20   ] |
+    0.446 ms [7    ] |
+    0.545 ms [196  ] |∎
+    0.644 ms [408  ] |∎∎∎∎
+    0.743 ms [378  ] |∎∎∎
+    0.842 ms [292  ] |∎∎
+    0.941 ms [146  ] |∎
+    1.040 ms [47   ] |
+    1.139 ms [9    ] |
+    1.238 ms [4    ] |
+    1.337 ms [1    ] |
 
 Latency distribution:
-  10% in under 0.477 ms
-  25% in under 0.535 ms
-  50% in under 0.596 ms
-  75% in under 0.682 ms
-  90% in under 0.769 ms
-  95% in under 0.908 ms
-  99% in under 1.332 ms
+  10% in under 0.576 ms
+  25% in under 0.621 ms
+  50% in under 0.717 ms
+  75% in under 0.829 ms
+  90% in under 0.915 ms
+  95% in under 0.970 ms
+  99% in under 1.069 ms
 ```
 
 For a detailed output of the results, please enable the corresponding flag like:

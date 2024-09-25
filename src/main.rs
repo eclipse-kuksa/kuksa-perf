@@ -37,7 +37,7 @@ struct Args {
         default_value_t = 8,
         conflicts_with = "run_forever"
     )]
-    run_seconds: u64,
+    duration: u64,
 
     /// Api of databroker.
     #[clap(long, display_order = 2, default_value = "kuksa.val.v1", value_parser = clap::builder::PossibleValuesParser::new(["kuksa.val.v1", "kuksa.val.v2", "sdv.databroker.v1"]))]
@@ -55,7 +55,7 @@ struct Args {
     #[clap(
         long,
         display_order = 5,
-        value_name = "RUN_SECONDS",
+        value_name = "DURATION",
         default_value_t = 4
     )]
     skip_seconds: u64,
@@ -120,12 +120,12 @@ async fn main() -> Result<()> {
     let config_groups = read_config(args.test_data_file.as_ref())?;
 
     // Skip at most _iterations_ number of iterations
-    let skip_seconds = max(0, min(args.run_seconds, args.skip_seconds));
+    let skip_seconds = max(0, min(args.duration, args.skip_seconds));
 
     let measurement_config = MeasurementConfig {
         host: args.host,
         port: args.port,
-        run_seconds: args.run_seconds,
+        duration: args.duration,
         interval: 0,
         skip_seconds,
         api,
