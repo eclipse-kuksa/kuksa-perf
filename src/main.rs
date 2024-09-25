@@ -105,6 +105,14 @@ async fn main() -> Result<()> {
 
     let shutdown_handler = setup_shutdown_handler();
 
+    if args.duration <= args.skip_seconds {
+        eprintln!(
+            "Error: `duration` ({}) cannot be equal or smaller than `skip_seconds` ({}).",
+            args.duration, args.skip_seconds
+        );
+        std::process::exit(1);
+    }
+
     let mut api = Api::KuksaValV1;
     if args.api.contains("sdv.databroker.v1") {
         api = Api::SdvDatabrokerV1;
