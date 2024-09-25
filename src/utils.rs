@@ -166,9 +166,17 @@ pub fn write_global_output(
         writeln!(stdout, "  Run forever: Activated")?;
 
         global_end_time /= measurement_results.len() as u32;
-        writeln!(stdout, "  Total elapsed seconds: {}", global_end_time.as_secs())?;
+        writeln!(
+            stdout,
+            "  Total elapsed seconds: {}",
+            global_end_time.as_secs()
+        )?;
     } else {
-        writeln!(stdout, "  Total elapsed seconds: {}", measurement_config.duration)?;
+        writeln!(
+            stdout,
+            "  Total elapsed seconds: {}",
+            measurement_config.duration
+        )?;
     }
 
     writeln!(

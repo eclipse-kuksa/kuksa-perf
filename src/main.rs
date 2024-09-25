@@ -52,12 +52,7 @@ struct Args {
     port: u64,
 
     /// Seconds to run (skip) before measuring the latency.
-    #[clap(
-        long,
-        display_order = 5,
-        value_name = "DURATION",
-        default_value_t = 4
-    )]
+    #[clap(long, display_order = 5, value_name = "DURATION", default_value_t = 4)]
     skip_seconds: u64,
 
     /// Print more details in the summary result
