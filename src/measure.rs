@@ -269,7 +269,7 @@ pub async fn perform_measurement(
         }
     }
 
-    let _ = write_global_output(&measurement_config, &measurements_results);
+    write_global_output(&measurement_config, &measurements_results).unwrap();
 
     if measurement_config.detailed_output {
         for group in config_groups {

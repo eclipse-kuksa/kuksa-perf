@@ -139,26 +139,33 @@ pub fn write_global_output(
     let mut global_hist = Histogram::<u64>::new_with_bounds(1, 60 * 60 * 1000 * 1000, 3)?;
 
     let mut global_signals_len = 0;
-
     let mut global_signals_sent = 0;
     let mut global_signals_skipped = 0;
+    let mut global_quantile = 0.0;
 
     for result in measurement_results {
+        global_end_time += end_time.duration_since(result.start_time)?;
+
         global_hist += result.measurement_context.hist.clone();
+
         global_signals_len += result.measurement_context.signals.len();
         global_signals_sent +=
             result.iterations_executed * result.measurement_context.signals.len() as u64;
         global_signals_skipped += result.signals_skipped;
-        global_end_time += end_time.duration_since(result.start_time)?;
+        global_quantile += result
+            .measurement_context
+            .hist
+            .value_at_quantile(95.0 / 100.0) as f64
+            / 1000.0
     }
-
-    global_end_time /= measurement_results.len() as u32;
 
     writeln!(stdout, "\n\nGlobal Summary:")?;
     writeln!(stdout, "  API: {}", measurement_config.api)?;
 
     if measurement_config.run_forever {
         writeln!(stdout, "  Run forever: Activated")?;
+
+        global_end_time /= measurement_results.len() as u32;
         writeln!(stdout, "  Run seconds: {}", global_end_time.as_secs())?;
     } else {
         writeln!(stdout, "  Run seconds: {}", measurement_config.run_seconds)?;
@@ -191,6 +198,9 @@ pub fn write_global_output(
             global_hist.len() / (measurement_config.run_seconds - measurement_config.skip_seconds)
         )?;
     }
+
+    global_quantile /= measurement_results.len() as f64;
+    writeln!(stdout, "  95% in under: {:.3} ms", global_quantile)?;
 
     writeln!(
         stdout,
@@ -255,6 +265,27 @@ pub fn write_output(measurement_result: &MeasurementResult) -> Result<()> {
         stdout,
         "  Received: {} updates",
         measurement_context.hist.len()
+    )?;
+
+    if measurement_config.run_forever {
+        writeln!(
+            stdout,
+            "  Signal/Second: {} signal/s",
+            measurement_context.hist.len()
+                / (total_duration.as_secs() - measurement_config.skip_seconds)
+        )?;
+    } else {
+        writeln!(
+            stdout,
+            "  Signal/Second: {} signal/s",
+            measurement_context.hist.len()
+                / (measurement_config.run_seconds - measurement_config.skip_seconds)
+        )?;
+    }
+    writeln!(
+        stdout,
+        "  95% in under: {:.3} ms",
+        measurement_context.hist.value_at_quantile(95.0 / 100.0) as f64 / 1000.0
     )?;
     writeln!(
         stdout,

@@ -9,39 +9,40 @@ Performance measurement app for KUKSA databroker.
 
 Global Summary:
   API: KuksaValV2
-  Run seconds: 10
-  Skipped run seconds: 5
+  Run seconds: 6
+  Skipped run seconds: 2
   Total signals: 8 signals
-  Sent: 3819 signal updates
-  Skipped: 1918 signal updates
-  Received: 1901 signal updates
-  Signal/Second: 380 signal/s
-  Fastest:   0.109 ms
-  Slowest:   1.487 ms
-  Average:   0.628 ms
+  Sent: 2275 signal updates
+  Skipped: 768 signal updates
+  Received: 1507 signal updates
+  Signal/Second: 376 signal/s
+  95% in under: 0.915 ms
+  Fastest:   0.208 ms
+  Slowest:   3.575 ms
+  Average:   0.623 ms
 
 Latency histogram:
-    0.063 ms [2    ] |
-    0.188 ms [190  ] |∎
-    0.313 ms [303  ] |∎∎
-    0.438 ms [193  ] |∎
-    0.563 ms [175  ] |∎
-    0.688 ms [385  ] |∎∎∎
-    0.813 ms [252  ] |∎∎
-    0.938 ms [207  ] |∎
-    1.063 ms [142  ] |∎
-    1.188 ms [37   ] |
-    1.313 ms [14   ] |
-    1.438 ms [1    ] |
+    0.153 ms [38   ] |
+    0.459 ms [759  ] |∎∎∎∎∎∎∎
+    0.765 ms [637  ] |∎∎∎∎∎∎
+    1.071 ms [51   ] |
+    1.377 ms [10   ] |
+    1.683 ms [7    ] |
+    1.989 ms [3    ] |
+    2.295 ms [1    ] |
+    2.601 ms [0    ] |
+    2.907 ms [0    ] |
+    3.213 ms [0    ] |
+    3.519 ms [1    ] |
 
 Latency distribution:
-  10% in under 0.249 ms
-  25% in under 0.364 ms
-  50% in under 0.659 ms
-  75% in under 0.843 ms
-  90% in under 1.002 ms
-  95% in under 1.076 ms
-  99% in under 1.180 ms
+  10% in under 0.477 ms
+  25% in under 0.535 ms
+  50% in under 0.596 ms
+  75% in under 0.682 ms
+  90% in under 0.769 ms
+  95% in under 0.908 ms
+  99% in under 1.332 ms
 ```
 
 # Local Setup
@@ -111,39 +112,40 @@ By default, the group results output will be summarised and contracted as follow
 ```
 Global Summary:
   API: KuksaValV2
-  Run seconds: 10
-  Skipped run seconds: 5
-  Total signals: 55 signals
-  Sent: 9812 signal updates
-  Skipped: 5155 signal updates
-  Received: 4657 signal updates
-  Signal/Second: 931 signal/s
-  Fastest:   0.137 ms
-  Slowest:   3.755 ms
-  Average:   0.637 ms
+  Run seconds: 6
+  Skipped run seconds: 2
+  Total signals: 8 signals
+  Sent: 2275 signal updates
+  Skipped: 768 signal updates
+  Received: 1507 signal updates
+  Signal/Second: 376 signal/s
+  95% in under: 0.915 ms
+  Fastest:   0.208 ms
+  Slowest:   3.575 ms
+  Average:   0.623 ms
 
 Latency histogram:
-    0.164 ms [850  ] |∎∎
-    0.492 ms [1782 ] |∎∎∎∎∎
-    0.820 ms [1616 ] |∎∎∎∎∎
-    1.148 ms [296  ] |
-    1.476 ms [76   ] |
-    1.804 ms [5    ] |
-    2.132 ms [10   ] |
-    2.460 ms [17   ] |
-    2.788 ms [0    ] |
-    3.116 ms [0    ] |
-    3.444 ms [0    ] |
-    3.772 ms [5    ] |
+    0.153 ms [38   ] |
+    0.459 ms [759  ] |∎∎∎∎∎∎∎
+    0.765 ms [637  ] |∎∎∎∎∎∎
+    1.071 ms [51   ] |
+    1.377 ms [10   ] |
+    1.683 ms [7    ] |
+    1.989 ms [3    ] |
+    2.295 ms [1    ] |
+    2.601 ms [0    ] |
+    2.907 ms [0    ] |
+    3.213 ms [0    ] |
+    3.519 ms [1    ] |
 
 Latency distribution:
-  10% in under 0.247 ms
-  25% in under 0.431 ms
-  50% in under 0.633 ms
-  75% in under 0.765 ms
-  90% in under 0.955 ms
-  95% in under 1.098 ms
-  99% in under 1.544 ms
+  10% in under 0.477 ms
+  25% in under 0.535 ms
+  50% in under 0.596 ms
+  75% in under 0.682 ms
+  90% in under 0.769 ms
+  95% in under 0.908 ms
+  99% in under 1.332 ms
 ```
 
 For a detailed output of the results, please enable the corresponding flag like:
