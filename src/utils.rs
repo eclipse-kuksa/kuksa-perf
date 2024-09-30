@@ -53,25 +53,33 @@ pub fn read_config(config_file: Option<&String>) -> Result<Vec<Group>> {
             // Return a default set of groups or handle the None case appropriately
             Ok(vec![
                 Group {
-                    group_name: String::from("Frame A"),
-                    cycle_time_ms: 10,
+                    group_name: String::from("Group A"),
+                    cycle_time_ms: 0,
                     signals: vec![Signal {
                         path: String::from("Vehicle.Speed"),
                     }],
                 },
                 Group {
-                    group_name: String::from("Frame B"),
-                    cycle_time_ms: 20,
+                    group_name: String::from("Group B"),
+                    cycle_time_ms: 0,
                     signals: vec![Signal {
                         path: String::from("Vehicle.IsBrokenDown"),
                     }],
                 },
                 Group {
-                    group_name: String::from("Frame C"),
-                    cycle_time_ms: 30,
-                    signals: vec![Signal {
-                        path: String::from("Vehicle.Body.Windshield.Front.Wiping.Intensity"),
-                    }],
+                    group_name: String::from("Group C"),
+                    cycle_time_ms: 0,
+                    signals: vec![
+                        Signal {
+                            path: String::from("Vehicle.Body.Windshield.Front.Wiping.Intensity"),
+                        },
+                        Signal {
+                            path: String::from("Vehicle.Body.Windshield.Front.Wiping.Mode"),
+                        },
+                        Signal {
+                            path: String::from("Vehicle.Body.Windshield.Front.Wiping.WiperWear"),
+                        },
+                    ],
                 },
             ])
         }

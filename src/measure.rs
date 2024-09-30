@@ -80,9 +80,9 @@ pub struct MeasurementResult {
 impl fmt::Display for Api {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Api::KuksaValV1 => write!(f, "KuksaValV1"),
-            Api::KuksaValV2 => write!(f, "KuksaValV2"),
-            Api::SdvDatabrokerV1 => write!(f, "SdvDatabrokerV1"),
+            Api::KuksaValV1 => write!(f, "kuksa.val.v1"),
+            Api::KuksaValV2 => write!(f, "kuksa.val.v2"),
+            Api::SdvDatabrokerV1 => write!(f, "sdv.databroker.v1"),
         }
     }
 }
