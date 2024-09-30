@@ -122,6 +122,16 @@ async fn main() -> Result<()> {
 
     let config_groups = read_config(args.test_data_file.as_ref())?;
 
+    for group in &config_groups {
+        if group.cycle_time_ms as u64 >= args.duration * 1000 {
+            eprintln!(
+                "Error: Group name: {} contain a higher or equal cycle_time_ms: {} seconds than the specified test --duration: {} seconds.",
+                group.group_name, group.cycle_time_ms / 1000, args.duration
+            );
+            std::process::exit(1);
+        }
+    }
+
     // Skip at most _iterations_ number of iterations
     let skip_seconds = max(0, min(args.duration, args.skip_seconds));
 
