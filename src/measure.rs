@@ -32,6 +32,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 use tokio::sync::RwLock;
+use tokio::task;
 use tokio::{select, task::JoinSet, time::Instant};
 use tonic::transport::Endpoint;
 
@@ -80,9 +81,9 @@ pub struct MeasurementResult {
 impl fmt::Display for Api {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Api::KuksaValV1 => write!(f, "kuksa.val.v1"),
-            Api::KuksaValV2 => write!(f, "kuksa.val.v2"),
-            Api::SdvDatabrokerV1 => write!(f, "sdv.databroker.v1"),
+            Api::KuksaValV1 => write!(f, "KuksaValV1"),
+            Api::KuksaValV2 => write!(f, "KuksaValV2"),
+            Api::SdvDatabrokerV1 => write!(f, "SdvDatabrokerV1"),
         }
     }
 }
@@ -113,12 +114,12 @@ fn create_databroker_endpoint(host: String, port: u64) -> Result<Endpoint> {
         .with_context(|| "Failed to parse server url")?;
 
     // Leave out for now until we decide what and how to configure it
-    // let endpoint = endpoint
-    //     .initial_stream_window_size(1000 * 3 * 128 * 1024) // 20 MB stream window size
-    //     .initial_connection_window_size(1000 * 3 * 128 * 1024) // 20 MB connection window size
-    //     .keep_alive_timeout(Duration::from_secs(1)) // 60 seconds keepalive time
-    //     .keep_alive_timeout(Duration::from_secs(1)) // 20 seconds keepalive timeout
-    //     .timeout(Duration::from_secs(1));
+    let endpoint = endpoint
+        .initial_stream_window_size(1000 * 3 * 128 * 1024) // 20 MB stream window size
+        .initial_connection_window_size(1000 * 3 * 128 * 1024) // 20 MB connection window size
+        .keep_alive_timeout(Duration::from_secs(1)) // 60 seconds keepalive time
+        .keep_alive_timeout(Duration::from_secs(1)) // 20 seconds keepalive timeout
+        .timeout(Duration::from_secs(1));
 
     Ok(endpoint)
 }
@@ -242,20 +243,28 @@ pub async fn perform_measurement(
         });
     }
 
+    let start_run = Instant::now();
+    let duration = measurement_config.duration * 1000;
+
+    // Stop the execution of tasks when the test duration is exceeded.
+    task::spawn(async move {
+        while start_run.elapsed().as_millis() < duration.into()
+            && shutdown_handler_ref
+                .read()
+                .await
+                .state
+                .running
+                .load(Ordering::SeqCst)
+        {}
+        if shutdown_handler_ref.write().await.trigger.send(()).is_err() {
+            println!("failed to trigger shutdown");
+        }
+    });
+
     let mut measurements_results = Vec::<MeasurementResult>::new();
     while let Some(received) = tasks.join_next().await {
         match received {
             Ok(Ok(measurement_result)) => {
-                // Whenever the first measurement result is received it should stop the execution of the remaning running groups.
-                measurement_result
-                    .measurement_context
-                    .shutdown_handler
-                    .write()
-                    .await
-                    .state
-                    .running
-                    .store(false, Ordering::SeqCst);
-
                 measurements_results.push(measurement_result);
             }
             Ok(Err(err)) => {
@@ -327,7 +336,14 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
         }
 
         if let Some(interval_to_run) = interval_to_run.as_mut() {
-            interval_to_run.tick().await;
+            let mut shutdown_triggered = ctx.shutdown_handler.write().await.trigger.subscribe();
+            tokio::select! {
+                _ = interval_to_run.tick() => {
+                }
+                _ = shutdown_triggered.recv() => {
+                    break;
+                }
+            }
         }
 
         let provider = ctx.provider.provider_interface.as_ref();
