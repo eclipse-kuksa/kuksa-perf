@@ -149,7 +149,6 @@ pub fn write_global_output(
     let mut global_signals_len = 0;
     let mut global_signals_sent = 0;
     let mut global_signals_skipped = 0;
-    let mut global_quantile = 0.0;
 
     for result in measurement_results {
         global_end_time += end_time.duration_since(result.start_time)?;
@@ -160,11 +159,6 @@ pub fn write_global_output(
         global_signals_sent +=
             result.iterations_executed * result.measurement_context.signals.len() as u64;
         global_signals_skipped += result.signals_skipped;
-        global_quantile += result
-            .measurement_context
-            .hist
-            .value_at_quantile(95.0 / 100.0) as f64
-            / 1000.0
     }
 
     writeln!(stdout, "\n\nGlobal Summary:")?;
@@ -215,8 +209,11 @@ pub fn write_global_output(
         )?;
     }
 
-    global_quantile /= measurement_results.len() as f64;
-    writeln!(stdout, "  95% in under: {:.3} ms", global_quantile)?;
+    writeln!(
+        stdout,
+        "  95% in under: {:.3} ms",
+        global_hist.value_at_quantile(95.0 / 100.0) as f64 / 1000.0
+    )?;
 
     writeln!(
         stdout,
