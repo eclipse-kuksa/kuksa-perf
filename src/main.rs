@@ -13,9 +13,13 @@
 
 use anyhow::Result;
 use clap::Parser;
+use config::Group;
 use measure::{perform_measurement, Api, MeasurementConfig};
 use shutdown::setup_shutdown_handler;
-use std::cmp::{max, min};
+use std::{
+    cmp::{max, min},
+    collections::HashSet,
+};
 
 use utils::read_config;
 
@@ -97,6 +101,20 @@ fn setup_logging(verbosity_level: log::Level) -> Result<()> {
     Ok(())
 }
 
+fn check_duplicate_paths(groups: &Vec<Group>) {
+    let mut seen_paths: HashSet<String> = HashSet::new();
+
+    for group in groups {
+        for signal in &group.signals {
+            if !seen_paths.insert(signal.path.clone()) {
+                // If the insert fails, it means the path is a duplicate
+                eprintln!("Error: Duplicate path found: {}", signal.path);
+                std::process::exit(1); // Exit the program with status code 1
+            }
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -132,6 +150,7 @@ async fn main() -> Result<()> {
         }
     }
 
+    check_duplicate_paths(&config_groups);
     // Skip at most _iterations_ number of iterations
     let skip_seconds = max(0, min(args.duration, args.skip_seconds));
 
