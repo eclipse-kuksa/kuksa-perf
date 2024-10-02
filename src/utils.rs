@@ -86,11 +86,7 @@ pub fn read_config(config_file: Option<&String>) -> Result<Vec<Group>> {
     }
 }
 
-fn print_latency_histogram(
-    stdout: &mut Term,
-    histogram: &Histogram<u64>,
-    signal_len: u64,
-) -> Result<()> {
+fn print_latency_histogram(stdout: &mut Term, histogram: &Histogram<u64>) -> Result<()> {
     let step_size = max(1, (histogram.max() - histogram.min()) / 11);
 
     let buckets = histogram.iter_linear(step_size);
@@ -98,25 +94,24 @@ fn print_latency_histogram(
     // skip initial empty buckets
     let buckets = buckets.skip_while(|v| v.count_since_last_iteration() == 0);
 
-    let mut histogram = Vec::with_capacity(11);
+    let mut histogram_percentile = Vec::with_capacity(11);
 
     for v in buckets {
         let mean = v.value_iterated_to() + 1 - step_size / 2; // +1 to make range inclusive
         let count = v.count_since_last_iteration();
-        histogram.push((mean, count));
+        histogram_percentile.push((mean, count));
     }
 
     let (_, cols) = stdout.size();
     debug!("Number of columns: {cols}");
 
-    let histogram_len = histogram.len() as u64;
-    for (mean, count) in histogram {
-        let bars = count as f64 / (histogram_len * signal_len) as f64 * (cols - 22) as f64;
+    for (mean, count) in &histogram_percentile {
+        let bars = (*count as f64 / histogram.len() as f64) * (cols - 22) as f64;
         let bar = "∎".repeat(bars as usize);
         writeln!(
             stdout,
             "  {:>7.3} ms [{:<5}] |{}",
-            mean as f64 / 1000.0,
+            *mean as f64 / 1000.0,
             count,
             bar
         )?;
@@ -228,7 +223,7 @@ pub fn write_global_output(
     writeln!(stdout, "  Average: {:>7.3} ms", global_hist.mean() / 1000.0)?;
 
     writeln!(stdout, "\nLatency histogram:")?;
-    print_latency_histogram(stdout.by_ref(), &global_hist, global_hist.len()).unwrap();
+    print_latency_histogram(stdout.by_ref(), &global_hist).unwrap();
 
     writeln!(stdout, "\nLatency distribution:")?;
     print_latency_distribution(stdout.by_ref(), &global_hist).unwrap();
@@ -318,12 +313,7 @@ pub fn write_output(measurement_result: &MeasurementResult) -> Result<()> {
 
     writeln!(stdout, "\nLatency histogram:")?;
 
-    print_latency_histogram(
-        stdout.by_ref(),
-        &measurement_context.hist,
-        measurement_context.hist.len(),
-    )
-    .unwrap();
+    print_latency_histogram(stdout.by_ref(), &measurement_context.hist).unwrap();
 
     writeln!(stdout, "\nLatency distribution:")?;
     print_latency_distribution(stdout.by_ref(), &measurement_context.hist).unwrap();
