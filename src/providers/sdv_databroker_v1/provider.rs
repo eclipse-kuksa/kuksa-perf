@@ -14,6 +14,7 @@
 use crate::config::Signal;
 use crate::providers::provider_trait::{Error, ProviderInterface, PublishError};
 use databroker_proto::sdv::databroker::v1 as proto;
+use rand::Rng;
 use tokio_stream::wrappers::ReceiverStream;
 
 use tonic::async_trait;
@@ -94,18 +95,14 @@ impl Provider {
 
 #[async_trait]
 impl ProviderInterface for Provider {
-    async fn publish(
-        &self,
-        signal_data: &[Signal],
-        iteration: u64,
-    ) -> Result<Instant, PublishError> {
+    async fn publish(&self, signal_data: &[Signal]) -> Result<Instant, PublishError> {
         let datapoints = HashMap::from_iter(signal_data.iter().map(|path: &Signal| {
             let metadata = self.metadata.get(&path.path).unwrap();
             (
                 metadata.id,
                 proto::Datapoint {
                     timestamp: None,
-                    value: Some(n_to_value(metadata, iteration).unwrap()),
+                    value: Some(n_to_value(metadata).unwrap()),
                 },
             )
         }));
@@ -201,7 +198,9 @@ impl ProviderInterface for Provider {
     }
 }
 
-pub fn n_to_value(metadata: &Metadata, n: u64) -> Result<proto::datapoint::Value, PublishError> {
+pub fn n_to_value(metadata: &Metadata) -> Result<proto::datapoint::Value, PublishError> {
+    let mut rng = rand::thread_rng();
+    let n: u64 = rng.gen();
     match metadata.data_type {
         proto::DataType::String => match &metadata.allowed_strings {
             Some(allowed) => {

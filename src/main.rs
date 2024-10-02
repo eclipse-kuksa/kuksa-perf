@@ -77,7 +77,7 @@ struct Args {
         long,
         action = clap::ArgAction::SetTrue,
         display_order = 8,
-        conflicts_with = "run_seconds",
+        conflicts_with = "duration",
         default_value_t = false
     )]
     run_forever: bool,

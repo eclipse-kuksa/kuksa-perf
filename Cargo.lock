@@ -345,6 +345,7 @@ dependencies = [
  "hdrhistogram",
  "indicatif",
  "log",
+ "rand",
  "serde",
  "serde_json",
  "stderrlog",
@@ -358,7 +359,7 @@ dependencies = [
 [[package]]
 name = "databroker-proto"
 version = "0.4.6"
-source = "git+https://github.com/boschglobal/kuksa-databroker.git?branch=prep-rel-0.5.0#3e2bd98f31434150e637f1e4b6843aa1fcdfc7bb"
+source = "git+https://github.com/eclipse-kuksa/kuksa-databroker.git?branch=feature/databroker-api-v2#4eee61cb3cf1269b1efa1c54c5ee813b82e27cf5"
 dependencies = [
  "prost",
  "prost-types",

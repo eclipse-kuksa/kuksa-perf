@@ -21,11 +21,7 @@ use crate::config::Signal;
 
 #[async_trait]
 pub trait ProviderInterface: Send + Sync {
-    async fn publish(
-        &self,
-        signal_data: &[Signal],
-        iteration: u64,
-    ) -> Result<Instant, PublishError>;
+    async fn publish(&self, signal_data: &[Signal]) -> Result<Instant, PublishError>;
     async fn validate_signals_metadata(&mut self, signals: &[Signal])
         -> Result<Vec<Signal>, Error>;
 }

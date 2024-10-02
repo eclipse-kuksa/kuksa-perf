@@ -113,7 +113,6 @@ fn create_databroker_endpoint(host: String, port: u64) -> Result<Endpoint> {
     let endpoint = tonic::transport::Channel::from_shared(databroker_address.clone())
         .with_context(|| "Failed to parse server url")?;
 
-    // Leave out for now until we decide what and how to configure it
     let endpoint = endpoint
         .initial_stream_window_size(1000 * 3 * 128 * 1024) // 20 MB stream window size
         .initial_connection_window_size(1000 * 3 * 128 * 1024) // 20 MB connection window size
@@ -347,7 +346,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
         }
 
         let provider = ctx.provider.provider_interface.as_ref();
-        let publish_task = provider.publish(&ctx.signals, iterations);
+        let publish_task = provider.publish(&ctx.signals);
 
         let mut subscriber_tasks: JoinSet<Result<Instant, subscriber::Error>> = JoinSet::new();
 
