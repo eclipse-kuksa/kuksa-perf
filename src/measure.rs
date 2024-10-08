@@ -267,7 +267,7 @@ pub async fn perform_measurement(
 
     // Stop the execution of tasks when the test duration is exceeded.
     task::spawn(async move {
-        while start_run.elapsed().as_millis() < duration.into()
+        while (measurement_config.run_forever || start_run.elapsed().as_millis() < duration.into())
             && shutdown_handler_ref
                 .read()
                 .await
@@ -275,6 +275,7 @@ pub async fn perform_measurement(
                 .running
                 .load(Ordering::SeqCst)
         {}
+        println!("Finished");
         if shutdown_handler_ref.write().await.trigger.send(()).is_err() {
             println!("failed to trigger shutdown");
         }
@@ -340,6 +341,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
                 .running
                 .load(Ordering::SeqCst)
         {
+            println!("Stoopped");
             break;
         }
 

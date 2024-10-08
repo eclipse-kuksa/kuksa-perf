@@ -39,7 +39,7 @@ struct Args {
         long,
         short,
         display_order = 1,
-        default_value_t = 8,
+        default_value_t = 0,
         conflicts_with = "run_forever"
     )]
     duration: u64,
@@ -57,7 +57,7 @@ struct Args {
     port: u64,
 
     /// Seconds to run (skip) before measuring the latency.
-    #[clap(long, display_order = 5, value_name = "DURATION", default_value_t = 4)]
+    #[clap(long, display_order = 5, value_name = "DURATION", default_value_t = 0)]
     skip_seconds: u64,
 
     /// Print more details in the summary result
@@ -79,7 +79,7 @@ struct Args {
         action = clap::ArgAction::SetTrue,
         display_order = 8,
         conflicts_with = "duration",
-        default_value_t = false
+        default_value_t = true
     )]
     run_forever: bool,
 
@@ -124,12 +124,15 @@ async fn main() -> Result<()> {
 
     let shutdown_handler = setup_shutdown_handler();
 
-    if args.duration <= args.skip_seconds {
+    let mut run_forever = args.run_forever;
+    if args.duration < args.skip_seconds {
         eprintln!(
-            "Error: `duration` ({}) cannot be equal or smaller than `skip_seconds` ({}).",
+            "Error: `duration` ({}) cannot be smaller than `skip_seconds` ({}).",
             args.duration, args.skip_seconds
         );
         std::process::exit(1);
+    } else if args.duration > 0 && args.skip_seconds > 0 {
+        run_forever = false;
     }
 
     let mut api = Api::KuksaValV1;
@@ -140,16 +143,6 @@ async fn main() -> Result<()> {
     }
 
     let config_groups = read_config(args.test_data_file.as_ref())?;
-
-    for group in &config_groups {
-        if group.cycle_time_ms as u64 >= args.duration * 1000 {
-            eprintln!(
-                "Error: Group name: {} contain a higher or equal cycle_time_ms: {} seconds than the specified test --duration: {} seconds.",
-                group.group_name, group.cycle_time_ms / 1000, args.duration
-            );
-            std::process::exit(1);
-        }
-    }
 
     check_duplicate_paths(&config_groups);
     // Skip at most _iterations_ number of iterations
@@ -162,7 +155,7 @@ async fn main() -> Result<()> {
         interval: 0,
         skip_seconds,
         api,
-        run_forever: args.run_forever,
+        run_forever,
         detailed_output: args.detailed_output,
     };
 
