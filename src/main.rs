@@ -39,8 +39,7 @@ struct Args {
         long,
         short,
         display_order = 1,
-        default_value_t = 0,
-        conflicts_with = "run_forever"
+        default_value_t = 0
     )]
     duration: u64,
 
@@ -72,16 +71,6 @@ struct Args {
     /// Path to test data file
     #[clap(long = "test-data-file", display_order = 7, value_name = "FILE")]
     test_data_file: Option<String>,
-
-    /// Run the measurements forever (until receiving a shutdown signal).
-    #[clap(
-        long,
-        action = clap::ArgAction::SetTrue,
-        display_order = 8,
-        conflicts_with = "duration",
-        default_value_t = true
-    )]
-    run_forever: bool,
 
     /// Verbosity level. Can be one of ERROR, WARN, INFO, DEBUG, TRACE.
     #[clap(
@@ -124,7 +113,7 @@ async fn main() -> Result<()> {
 
     let shutdown_handler = setup_shutdown_handler();
 
-    let mut run_forever = args.run_forever;
+    let mut run_forever = true;
     if args.duration < args.skip_seconds {
         eprintln!(
             "Error: `duration` ({}) cannot be smaller than `skip_seconds` ({}).",

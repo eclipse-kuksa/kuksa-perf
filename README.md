@@ -89,14 +89,13 @@ If running on MacOS:
 Usage: databroker-perf [OPTIONS]
 
 Options:
-  -d, --duration <DURATION>      Number of seconds to run [default: 8]
+  -d, --duration <DURATION>      Number of seconds to run [default: 0]
       --api <API>                Api of databroker [default: kuksa.val.v1] [possible values: kuksa.val.v1, kuksa.val.v2, sdv.databroker.v1]
       --host <HOST>              Host address of databroker [default: http://127.0.0.1]
       --port <PORT>              Port of databroker [default: 55555]
-      --skip-seconds <DURATION>  Seconds to run (skip) before measuring the latency [default: 4]
+      --skip-seconds <DURATION>  Seconds to run (skip) before measuring the latency [default: 0]
       --detailed-output          Print more details in the summary result
       --test-data-file <FILE>    Path to test data file
-      --run-forever              Run the measurements forever (until receiving a shutdown signal)
   -v, --verbosity <LEVEL>        Verbosity level. Can be one of ERROR, WARN, INFO, DEBUG, TRACE [default: WARN]
   -h, --help                     Print help
   -V, --version                  Print version
