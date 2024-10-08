@@ -12,9 +12,8 @@
 ********************************************************************************/
 
 use crate::config::Signal;
-use crate::conversion::from_v1;
 use crate::providers::provider_trait::{Error, ProviderInterface, PublishError};
-use crate::utils::DataValue;
+use crate::types::DataValue;
 use databroker_proto::kuksa::val::v1::{self as proto, value_restriction};
 
 use tokio_stream::wrappers::ReceiverStream;
@@ -104,7 +103,7 @@ impl ProviderInterface for Provider {
                 let metadata = self.metadata.get(&signal.path).unwrap();
                 let mut new_value = n_to_value(metadata, iteration).unwrap();
                 if let Some(value) = self.initial_signals_values.get(&signal.path) {
-                    if from_v1(new_value.clone()) == *value {
+                    if DataValue::from(&Some(new_value.clone())) == *value {
                         new_value = n_to_value(metadata, iteration + 1).unwrap();
                     }
                 }

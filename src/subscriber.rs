@@ -24,10 +24,9 @@ use tokio::{
 };
 use tonic::transport::Channel;
 
-use crate::conversion::{transform_v1, transform_v2};
 use crate::{config::Signal, measure::Api};
 
-use crate::utils::DataValue;
+use crate::types::DataValue;
 
 pub struct Subscriber {
     signals: Arc<HashMap<String, Sender<Instant>>>,
@@ -194,8 +193,10 @@ impl Subscriber {
                 let mut initial_signals_value: HashMap<String, DataValue> = HashMap::new();
                 for entry in first_current_value.unwrap().updates {
                     if let Some(value) = entry.entry.clone().unwrap().value {
-                        initial_signals_value
-                            .insert(entry.entry.unwrap().path.clone(), transform_v1(value.value));
+                        initial_signals_value.insert(
+                            entry.entry.unwrap().path.clone(),
+                            DataValue::from(&value.value),
+                        );
                     }
                 }
 
@@ -266,7 +267,7 @@ impl Subscriber {
 
                 let mut initial_signals_value: HashMap<String, DataValue> = HashMap::new();
                 for (path, datapoint) in first_current_value.unwrap().entries {
-                    initial_signals_value.insert(path, transform_v2(&datapoint));
+                    initial_signals_value.insert(path, DataValue::from(&datapoint.value));
                 }
 
                 let result = initial_values_sender.send(initial_signals_value).await;

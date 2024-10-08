@@ -24,11 +24,11 @@ use std::{
 use utils::read_config;
 
 mod config;
-mod conversion;
 mod measure;
 mod providers;
 mod shutdown;
 mod subscriber;
+mod types;
 mod utils;
 
 #[derive(Parser)]

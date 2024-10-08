@@ -30,27 +30,6 @@ use crate::{
 
 const MAX_NUMBER_OF_GROUPS: usize = 10;
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum DataValue {
-    NotAvailable,
-    Bool(bool),
-    String(String),
-    Int32(i32),
-    Int64(i64),
-    Uint32(u32),
-    Uint64(u64),
-    Float(f32),
-    Double(f64),
-    BoolArray(Vec<bool>),
-    StringArray(Vec<String>),
-    Int32Array(Vec<i32>),
-    Int64Array(Vec<i64>),
-    Uint32Array(Vec<u32>),
-    Uint64Array(Vec<u64>),
-    FloatArray(Vec<f32>),
-    DoubleArray(Vec<f64>),
-}
-
 pub fn read_config(config_file: Option<&String>) -> Result<Vec<Group>> {
     match config_file {
         Some(filename) => {

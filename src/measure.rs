@@ -20,7 +20,8 @@ use crate::config::{Group, Signal};
 
 use crate::shutdown::ShutdownHandler;
 use crate::subscriber::{self, Subscriber};
-use crate::utils::{write_global_output, write_output, DataValue};
+use crate::types::DataValue;
+use crate::utils::{write_global_output, write_output};
 
 use anyhow::{Context, Result};
 use hdrhistogram::Histogram;

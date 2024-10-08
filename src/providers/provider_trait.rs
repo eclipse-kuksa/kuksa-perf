@@ -19,7 +19,7 @@ use tonic::async_trait;
 use thiserror::Error;
 use tokio::time::Instant;
 
-use crate::{config::Signal, utils::DataValue};
+use crate::{config::Signal, types::DataValue};
 
 #[async_trait]
 pub trait ProviderInterface: Send + Sync {

@@ -12,9 +12,8 @@
 ********************************************************************************/
 
 use crate::config::Signal;
-use crate::conversion::from_v2;
 use crate::providers::provider_trait::{Error, ProviderInterface, PublishError};
-use crate::utils::DataValue;
+use crate::types::DataValue;
 
 use databroker_proto::kuksa::val::v2::{
     self as proto, open_provider_stream_request,
@@ -116,9 +115,8 @@ impl ProviderInterface for Provider {
             HashMap::from_iter(signal_data.iter().map(|path: &Signal| {
                 let metadata = self.metadata.get(&path.path).unwrap();
                 let mut new_value = n_to_value(metadata, iteration).unwrap();
-                let val = new_value.typed_value.clone().unwrap();
                 if let Some(value) = self.initial_signals_values.get(&path.path) {
-                    if from_v2(val) == *value {
+                    if DataValue::from(&Some(new_value.clone())) == *value {
                         new_value = n_to_value(metadata, iteration + 1).unwrap();
                     }
                 }

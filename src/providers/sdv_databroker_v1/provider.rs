@@ -13,7 +13,7 @@
 
 use crate::config::Signal;
 use crate::providers::provider_trait::{Error, ProviderInterface, PublishError};
-use crate::utils::DataValue;
+use crate::types::DataValue;
 use databroker_proto::sdv::databroker::v1 as proto;
 use tokio_stream::wrappers::ReceiverStream;
 
