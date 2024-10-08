@@ -11,5 +11,5 @@
 * SPDX-License-Identifier: Apache-2.0
 ********************************************************************************/
 
-mod conversions;
+pub mod conversions;
 pub mod provider;
