@@ -112,36 +112,26 @@ impl ProviderInterface for Provider {
         signal_data: &[Signal],
         iteration: u64,
     ) -> Result<Instant, PublishError> {
-        let mut datapoints = HashMap::new();
-        if iteration == 0 {
-            datapoints = HashMap::from_iter(signal_data.iter().map(|path: &Signal| {
+        let datapoints = if iteration == 0 {
+            HashMap::from_iter(signal_data.iter().map(|path: &Signal| {
                 let metadata = self.metadata.get(&path.path).unwrap();
                 let mut new_value = n_to_value(metadata, iteration).unwrap();
                 let val = new_value.typed_value.clone().unwrap();
                 if let Some(value) = self.initial_signals_values.get(&path.path) {
                     if from_v2(val) == *value {
                         new_value = n_to_value(metadata, iteration + 1).unwrap();
-                        // Ensure new_value is defined
                     }
-                    (
-                        metadata.id,
-                        proto::Datapoint {
-                            timestamp: None,
-                            value: Some(new_value),
-                        },
-                    )
-                } else {
-                    (
-                        metadata.id,
-                        proto::Datapoint {
-                            timestamp: None,
-                            value: Some(new_value),
-                        },
-                    )
                 }
-            }));
+                (
+                    metadata.id,
+                    proto::Datapoint {
+                        timestamp: None,
+                        value: Some(new_value),
+                    },
+                )
+            }))
         } else {
-            datapoints = HashMap::from_iter(signal_data.iter().map(|path: &Signal| {
+            HashMap::from_iter(signal_data.iter().map(|path: &Signal| {
                 let metadata = self.metadata.get(&path.path).unwrap();
                 (
                     metadata.id,
@@ -150,8 +140,8 @@ impl ProviderInterface for Provider {
                         value: Some(n_to_value(metadata, iteration + 1).unwrap()),
                     },
                 )
-            }));
-        }
+            }))
+        };
 
         let payload = proto::OpenProviderStreamRequest {
             action: Some(open_provider_stream_request::Action::PublishValuesRequest(
