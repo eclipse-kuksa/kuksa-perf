@@ -35,12 +35,7 @@ mod utils;
 #[clap(author, version, about)]
 struct Args {
     /// Number of seconds to run.
-    #[clap(
-        long,
-        short,
-        display_order = 1,
-        default_value_t = 0
-    )]
+    #[clap(long, short, display_order = 1, default_value_t = 0)]
     duration: u64,
 
     /// Api of databroker.
