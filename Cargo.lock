@@ -345,7 +345,6 @@ dependencies = [
  "hdrhistogram",
  "indicatif",
  "log",
- "rand",
  "serde",
  "serde_json",
  "stderrlog",

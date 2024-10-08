@@ -24,6 +24,7 @@ use std::{
 use utils::read_config;
 
 mod config;
+mod conversion;
 mod measure;
 mod providers;
 mod shutdown;

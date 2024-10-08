@@ -12,9 +12,11 @@
 ********************************************************************************/
 
 use crate::config::Signal;
+use crate::conversion::from_v1;
 use crate::providers::provider_trait::{Error, ProviderInterface, PublishError};
+use crate::utils::DataValue;
 use databroker_proto::kuksa::val::v1::{self as proto, value_restriction};
-use rand::Rng;
+
 use tokio_stream::wrappers::ReceiverStream;
 
 use tonic::async_trait;
@@ -34,6 +36,7 @@ pub struct Provider {
     tx: Sender<proto::StreamedUpdateRequest>,
     metadata: HashMap<String, Metadata>,
     channel: Channel,
+    initial_signals_values: HashMap<String, DataValue>,
 }
 
 pub struct Metadata {
@@ -50,6 +53,7 @@ impl Provider {
             tx,
             metadata: HashMap::new(),
             channel,
+            initial_signals_values: HashMap::new(),
         })
     }
 
@@ -90,20 +94,65 @@ impl Provider {
 
 #[async_trait]
 impl ProviderInterface for Provider {
-    async fn publish(&self, signal_data: &[Signal]) -> Result<Instant, PublishError> {
-        let updates = Vec::from_iter(signal_data.iter().map(|signal| proto::EntryUpdate {
-            entry: Some(proto::DataEntry {
-                path: signal.path.clone(),
-                value: Some(proto::Datapoint {
-                    timestamp: None,
-                    value: Some(n_to_value(self.metadata.get(&signal.path).unwrap()).unwrap()),
-                }),
-                actuator_target: None,
-                metadata: None,
-            }),
-            fields: vec![proto::Field::Value.into()],
-        }));
-
+    async fn publish(
+        &self,
+        signal_data: &[Signal],
+        iteration: u64,
+    ) -> Result<Instant, PublishError> {
+        let mut updates = Vec::new();
+        if iteration == 0 {
+            updates = Vec::from_iter(signal_data.iter().map(|signal| {
+                let metadata = self.metadata.get(&signal.path).unwrap();
+                let mut new_value = n_to_value(metadata, iteration).unwrap();
+                if let Some(value) = self.initial_signals_values.get(&signal.path) {
+                    if from_v1(new_value.clone()) == *value {
+                        new_value = n_to_value(metadata, iteration + 1).unwrap();
+                        // Ensure new_value is defined
+                    }
+                    proto::EntryUpdate {
+                        entry: Some(proto::DataEntry {
+                            path: signal.path.clone(),
+                            value: Some(proto::Datapoint {
+                                timestamp: None,
+                                value: Some(new_value),
+                            }),
+                            actuator_target: None,
+                            metadata: None,
+                        }),
+                        fields: vec![proto::Field::Value.into()],
+                    }
+                } else {
+                    proto::EntryUpdate {
+                        entry: Some(proto::DataEntry {
+                            path: signal.path.clone(),
+                            value: Some(proto::Datapoint {
+                                timestamp: None,
+                                value: Some(new_value),
+                            }),
+                            actuator_target: None,
+                            metadata: None,
+                        }),
+                        fields: vec![proto::Field::Value.into()],
+                    }
+                }
+            }));
+        } else {
+            updates = Vec::from_iter(signal_data.iter().map(|signal| {
+                let metadata = self.metadata.get(&signal.path).unwrap();
+                proto::EntryUpdate {
+                    entry: Some(proto::DataEntry {
+                        path: signal.path.clone(),
+                        value: Some(proto::Datapoint {
+                            timestamp: None,
+                            value: Some(n_to_value(metadata, iteration + 1).unwrap()),
+                        }),
+                        actuator_target: None,
+                        metadata: None,
+                    }),
+                    fields: vec![proto::Field::Value.into()],
+                }
+            }));
+        }
         let payload = proto::StreamedUpdateRequest { updates };
 
         let now = Instant::now();
@@ -182,11 +231,17 @@ impl ProviderInterface for Provider {
             Ok(signals_response)
         }
     }
+
+    async fn set_initial_signals_values(
+        &mut self,
+        initial_signals_values: HashMap<String, DataValue>,
+    ) -> Result<(), Error> {
+        self.initial_signals_values = initial_signals_values;
+        Ok(())
+    }
 }
 
-pub fn n_to_value(metadata: &Metadata) -> Result<proto::datapoint::Value, PublishError> {
-    let mut rng = rand::thread_rng();
-    let n: u64 = rng.gen();
+pub fn n_to_value(metadata: &Metadata, n: u64) -> Result<proto::datapoint::Value, PublishError> {
     match metadata.data_type {
         proto::DataType::Unspecified => Err(PublishError::Shutdown),
         proto::DataType::String => match &metadata.allowed {

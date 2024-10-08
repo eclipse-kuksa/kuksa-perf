@@ -20,18 +20,20 @@ use crate::config::{Group, Signal};
 
 use crate::shutdown::ShutdownHandler;
 use crate::subscriber::{self, Subscriber};
-use crate::utils::{write_global_output, write_output};
+use crate::utils::{write_global_output, write_output, DataValue};
+
 use anyhow::{Context, Result};
 use hdrhistogram::Histogram;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use log::error;
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 use std::{
     sync::atomic::Ordering,
     time::{Duration, SystemTime},
 };
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc::Sender, RwLock};
 use tokio::task;
 use tokio::{select, task::JoinSet, time::Instant};
 use tonic::transport::Endpoint;
@@ -92,6 +94,7 @@ async fn setup_subscriber(
     endpoint: &Endpoint,
     signals: Vec<Signal>,
     api: &Api,
+    initial_values_sender: Sender<HashMap<String, DataValue>>,
 ) -> Result<Subscriber> {
     let subscriber_channel = endpoint.connect().await.with_context(|| {
         let host = endpoint.uri().host().unwrap_or("unknown host");
@@ -102,7 +105,9 @@ async fn setup_subscriber(
         format!("Failed to connect to server {}:{}", host, port)
     })?;
 
-    let subscriber = subscriber::Subscriber::new(subscriber_channel, signals, api).await?;
+    let subscriber =
+        subscriber::Subscriber::new(subscriber_channel, signals, api, initial_values_sender)
+            .await?;
 
     Ok(subscriber)
 }
@@ -168,6 +173,9 @@ pub async fn perform_measurement(
     for group in config_groups.clone() {
         let shutdown_handler = Arc::clone(&shutdown_handler_ref);
 
+        let (initial_values_sender, mut initial_values_reciever) =
+            tokio::sync::mpsc::channel::<HashMap<String, DataValue>>(10);
+
         let provider_endpoint =
             create_databroker_endpoint(measurement_config.host.clone(), measurement_config.port)?;
         let subscriber_endpoint =
@@ -188,8 +196,19 @@ pub async fn perform_measurement(
             &subscriber_endpoint,
             signals.clone(),
             &measurement_config.api,
+            initial_values_sender,
         )
         .await?;
+
+        // Receive the initial signal values
+        if let Some(initial_signal_values) = initial_values_reciever.recv().await {
+            let result = provider
+                .provider_interface
+                .as_mut()
+                .set_initial_signals_values(initial_signal_values)
+                .await;
+            assert!(result.is_ok());
+        }
 
         let hist = Histogram::<u64>::new_with_bounds(1, 60 * 60 * 1000 * 1000, 3)?;
         let running_hist = Histogram::<u64>::new_with_bounds(1, 60 * 60 * 1000 * 1000, 3)?;
@@ -346,7 +365,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
         }
 
         let provider = ctx.provider.provider_interface.as_ref();
-        let publish_task = provider.publish(&ctx.signals);
+        let publish_task = provider.publish(&ctx.signals, iterations);
 
         let mut subscriber_tasks: JoinSet<Result<Instant, subscriber::Error>> = JoinSet::new();
 
