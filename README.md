@@ -3,46 +3,47 @@
 Performance measurement app for KUKSA databroker.
 
 ```
-[00:00:10] Group: Frame 1 | Cycle(ms): 10 | Current latency: 0.519 ms [====================================================================]      6/6      seconds
-[00:00:09] Group: Frame 2 | Cycle(ms): 20 | Current latency: 0.562 ms [====================================================================]      6/6      seconds
-[00:00:09] Group: Frame 3 | Cycle(ms): 30 | Current latency: 0.732 ms [====================================================================]      6/6      seconds
+[00:00:05] [================================================================================================================]       5/5       seconds
 
 Global Summary:
-  API: KuksaValV2
-  Total elapsed seconds: 6
+  API: kuksa.val.v2
+  Total elapsed seconds: 5
   Skipped test seconds: 2
-  Total signals: 8 signals
-  Sent: 2283 signal updates
-  Skipped: 768 signal updates
-  Received: 1515 signal updates
-  Signal/Second: 378 signal/s
-  95% in under: 0.907 ms
-  Fastest:   0.252 ms
-  Slowest:   1.349 ms
-  Average:   0.732 ms
+  Total signals: 101 signals
+  Sent: 412014 signal updates
+  Skipped: 160207 signal updates
+  Received: 251807 signal updates
+  Throughput: 83935 signal/second
+  95% in under: 0.294 ms
+  Fastest:   0.056 ms
+  Slowest:   4.187 ms
+  Average:   0.225 ms
 
 Latency histogram:
-    0.248 ms [7    ] |
-    0.347 ms [20   ] |
-    0.446 ms [7    ] |
-    0.545 ms [196  ] |∎
-    0.644 ms [408  ] |∎∎∎∎
-    0.743 ms [378  ] |∎∎∎
-    0.842 ms [292  ] |∎∎
-    0.941 ms [146  ] |∎
-    1.040 ms [47   ] |
-    1.139 ms [9    ] |
-    1.238 ms [4    ] |
-    1.337 ms [1    ] |
+    0.188 ms [247553] |∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎
+    0.563 ms [1475 ] |∎
+    0.938 ms [143  ] |
+    1.313 ms [1083 ] |
+    1.688 ms [209  ] |
+    2.063 ms [70   ] |
+    2.438 ms [242  ] |
+    2.813 ms [514  ] |
+    3.188 ms [219  ] |
+    3.563 ms [119  ] |
+    3.938 ms [173  ] |
+    4.313 ms [7    ] |
 
 Latency distribution:
-  10% in under 0.576 ms
-  25% in under 0.621 ms
-  50% in under 0.717 ms
-  75% in under 0.829 ms
-  90% in under 0.915 ms
-  95% in under 0.970 ms
-  99% in under 1.069 ms
+  10% in under 0.154 ms
+  25% in under 0.180 ms
+  50% in under 0.199 ms
+  75% in under 0.224 ms
+  90% in under 0.263 ms
+  95% in under 0.294 ms
+  99% in under 1.205 ms
+
+
+
 ```
 
 # Local Setup
@@ -89,16 +90,16 @@ If running on MacOS:
 Usage: databroker-perf [OPTIONS]
 
 Options:
-  -d, --duration <DURATION>      Number of seconds to run [default: 0]
-      --api <API>                Api of databroker [default: kuksa.val.v1] [possible values: kuksa.val.v1, kuksa.val.v2, sdv.databroker.v1]
-      --host <HOST>              Host address of databroker [default: http://127.0.0.1]
-      --port <PORT>              Port of databroker [default: 55555]
-      --skip-seconds <DURATION>  Seconds to run (skip) before measuring the latency [default: 0]
-      --detailed-output          Print more details in the summary result
-      --test-data-file <FILE>    Path to test data file
-  -v, --verbosity <LEVEL>        Verbosity level. Can be one of ERROR, WARN, INFO, DEBUG, TRACE [default: WARN]
-  -h, --help                     Print help
-  -V, --version                  Print version
+  -d, --duration <SECONDS>      Number of seconds to run
+      --api <API>               Api of databroker [default: kuksa.val.v1] [possible values: kuksa.val.v1, kuksa.val.v2, sdv.databroker.v1]
+      --host <HOST>             Host address of databroker [default: http://127.0.0.1]
+      --port <PORT>             Port of databroker [default: 55555]
+      --skip-seconds <SECONDS>  Seconds to run (skip) before measuring the latency
+      --detailed-output         Print more details in the summary result
+      --test-data-file <FILE>   Path to test data file
+  -v, --verbosity <LEVEL>       Verbosity level. Can be one of ERROR, WARN, INFO, DEBUG, TRACE [default: WARN]
+  -h, --help                    Print help
+  -V, --version                 Print version
 ```
 
 ```
@@ -110,41 +111,42 @@ Options:
 By default, the group results output will be summarised and contracted as follows:
 ```
 Global Summary:
-  API: KuksaValV2
-  Total elapsed seconds: 6
+  API: kuksa.val.v2
+  Total elapsed seconds: 5
   Skipped test seconds: 2
-  Total signals: 8 signals
-  Sent: 2283 signal updates
-  Skipped: 768 signal updates
-  Received: 1515 signal updates
-  Signal/Second: 378 signal/s
-  95% in under: 0.907 ms
-  Fastest:   0.252 ms
-  Slowest:   1.349 ms
-  Average:   0.732 ms
+  Total signals: 55 signals
+  Sent: 5155 signal updates
+  Skipped: 2069 signal updates
+  Received: 3086 signal updates
+  Signal/Second: 1028 signal/s
+  95% in under: 0.215 ms
+  Fastest:   0.067 ms
+  Slowest:   0.295 ms
+  Average:   0.140 ms
 
 Latency histogram:
-    0.248 ms [7    ] |
-    0.347 ms [20   ] |
-    0.446 ms [7    ] |
-    0.545 ms [196  ] |∎
-    0.644 ms [408  ] |∎∎∎∎
-    0.743 ms [378  ] |∎∎∎
-    0.842 ms [292  ] |∎∎
-    0.941 ms [146  ] |∎
-    1.040 ms [47   ] |
-    1.139 ms [9    ] |
-    1.238 ms [4    ] |
-    1.337 ms [1    ] |
+    0.070 ms [45   ] |∎∎
+    0.090 ms [424  ] |∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎
+    0.110 ms [537  ] |∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎
+    0.130 ms [779  ] |∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎
+    0.150 ms [462  ] |∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎
+    0.170 ms [364  ] |∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎
+    0.190 ms [180  ] |∎∎∎∎∎∎∎∎∎∎∎
+    0.210 ms [164  ] |∎∎∎∎∎∎∎∎∎∎
+    0.230 ms [85   ] |∎∎∎∎∎
+    0.250 ms [33   ] |∎∎
+    0.270 ms [5    ] |
+    0.290 ms [8    ] |
 
 Latency distribution:
-  10% in under 0.576 ms
-  25% in under 0.621 ms
-  50% in under 0.717 ms
-  75% in under 0.829 ms
-  90% in under 0.915 ms
-  95% in under 0.970 ms
-  99% in under 1.069 ms
+  10% in under 0.092 ms
+  25% in under 0.112 ms
+  50% in under 0.132 ms
+  75% in under 0.164 ms
+  90% in under 0.199 ms
+  95% in under 0.215 ms
+  99% in under 0.253 ms
+
 ```
 
 For a detailed output of the results, please enable the corresponding flag like:
@@ -185,7 +187,8 @@ i. e.
           "path": "Vehicle.AverageSpeed"
         }
       ]
-    }
+    },
+    ...
   ]
 }
 ```

@@ -82,9 +82,9 @@ pub struct MeasurementResult {
 impl fmt::Display for Api {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Api::KuksaValV1 => write!(f, "KuksaValV1"),
-            Api::KuksaValV2 => write!(f, "KuksaValV2"),
-            Api::SdvDatabrokerV1 => write!(f, "SdvDatabrokerV1"),
+            Api::KuksaValV1 => write!(f, "kuksa.val.v1"),
+            Api::KuksaValV2 => write!(f, "kuksa.val.v2"),
+            Api::SdvDatabrokerV1 => write!(f, "sdv.databroker.v1"),
         }
     }
 }
@@ -118,10 +118,10 @@ fn create_databroker_endpoint(host: String, port: u64) -> Result<Endpoint> {
         .with_context(|| "Failed to parse server url")?;
 
     let endpoint = endpoint
-        .initial_stream_window_size(1000 * 3 * 128 * 1024) // 20 MB stream window size
-        .initial_connection_window_size(1000 * 3 * 128 * 1024) // 20 MB connection window size
-        .keep_alive_timeout(Duration::from_secs(1)) // 60 seconds keepalive time
-        .keep_alive_timeout(Duration::from_secs(1)) // 20 seconds keepalive timeout
+        .initial_stream_window_size(100 * 1024 * 1024) // 100 MB stream window size
+        .initial_connection_window_size(100 * 1024 * 1024) // 100 MB connection window size
+        .keep_alive_timeout(Duration::from_secs(1))
+        .keep_alive_timeout(Duration::from_secs(1))
         .timeout(Duration::from_secs(1));
 
     Ok(endpoint)
@@ -299,6 +299,12 @@ pub async fn perform_measurement(
                 progress_bar_task.tick();
             }
         }
+        shutdown_handler_ref
+            .write()
+            .await
+            .state
+            .running
+            .store(false, Ordering::SeqCst);
         if shutdown_handler_ref.write().await.trigger.send(()).is_err() {
             println!("failed to trigger shutdown");
         }
@@ -345,25 +351,11 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
     let mut skipped = 0;
     let start_run = Instant::now();
 
-    let mut run_forever = false;
-
-    let run_milliseconds = ctx
-        .measurement_config
-        .duration
-        .map(|duration| duration * 1000)
-        .unwrap_or_else(|| {
-            run_forever = true;
-            0
-        });
-
     let skip_milliseconds = ctx
         .measurement_config
         .skip_seconds
         .map(|skip_seconds| skip_seconds * 1000)
-        .unwrap_or_else(|| {
-            run_forever = true;
-            0
-        });
+        .unwrap_or_else(|| 0);
 
     let mut interval_to_run = if ctx.measurement_config.interval == 0 {
         None
@@ -374,14 +366,13 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
     };
 
     loop {
-        if !run_forever && start_run.elapsed().as_millis() >= run_milliseconds.into()
-            || !ctx
-                .shutdown_handler
-                .read()
-                .await
-                .state
-                .running
-                .load(Ordering::SeqCst)
+        if !ctx
+            .shutdown_handler
+            .read()
+            .await
+            .state
+            .running
+            .load(Ordering::SeqCst)
         {
             break;
         }

@@ -150,18 +150,22 @@ pub fn write_global_output(
     writeln!(stdout, "\n\nGlobal Summary:")?;
     writeln!(stdout, "  API: {}", measurement_config.api)?;
 
-    let total_elapsed_seconds = if let Some(duration) = measurement_config.duration {
-        duration
-    } else {
-        global_end_time /= measurement_results.len() as u32;
-        global_end_time.as_secs()
+    let total_elapsed_seconds = match measurement_config.duration {
+        Some(duration) => duration,
+        None => {
+            global_end_time /= measurement_results.len() as u32; // Update global_end_time
+            global_end_time.as_secs() // Return the adjusted seconds
+        }
     };
-
     writeln!(stdout, "  Total elapsed seconds: {}", total_elapsed_seconds)?;
 
-    if let Some(skip_seconds) = measurement_config.skip_seconds {
-        writeln!(stdout, "  Skipped test seconds: {}", skip_seconds)?;
-    }
+    let skip_seconds = match measurement_config.skip_seconds {
+        Some(seconds) => {
+            writeln!(stdout, "  Skipped test seconds: {}", seconds)?;
+            seconds
+        }
+        None => 0,
+    };
 
     writeln!(stdout, "  Total signals: {} signals", global_signals_len,)?;
     writeln!(stdout, "  Sent: {} signal updates", global_signals_sent,)?;
@@ -172,15 +176,14 @@ pub fn write_global_output(
     )?;
     writeln!(stdout, "  Received: {} signal updates", global_hist.len())?;
 
-    let elapsed_seconds = if let Some(duration) = measurement_config.duration {
-        duration - measurement_config.skip_seconds.unwrap()
-    } else {
-        global_end_time.as_secs() - measurement_config.skip_seconds.unwrap()
+    let elapsed_seconds = match measurement_config.duration {
+        Some(duration) => duration - skip_seconds,
+        None => global_end_time.as_secs() - skip_seconds,
     };
 
     writeln!(
         stdout,
-        "  Signal/Second: {} signal/s",
+        "  Throughput: {} signal/second",
         global_hist.len() / elapsed_seconds
     )?;
 
@@ -255,14 +258,17 @@ pub fn write_output(measurement_result: &MeasurementResult) -> Result<()> {
         measurement_context.hist.len()
     )?;
 
-    let throughput = if let Some(duration) = measurement_config.duration {
-        measurement_context.hist.len() / (duration - measurement_config.skip_seconds.unwrap())
-    } else {
-        measurement_context.hist.len()
-            / (total_duration.as_secs() - measurement_config.skip_seconds.unwrap())
+    let throughput = match measurement_config.duration {
+        Some(duration) => {
+            measurement_context.hist.len() / (duration - measurement_config.skip_seconds.unwrap())
+        }
+        None => {
+            measurement_context.hist.len()
+                / (total_duration.as_secs() - measurement_config.skip_seconds.unwrap())
+        }
     };
 
-    writeln!(stdout, "  Throughput: {} signal/s", throughput)?;
+    writeln!(stdout, "  Throughput: {} signal/second", throughput)?;
 
     writeln!(
         stdout,

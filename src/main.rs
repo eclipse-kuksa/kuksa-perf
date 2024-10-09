@@ -105,13 +105,18 @@ async fn main() -> Result<()> {
 
     let shutdown_handler = setup_shutdown_handler();
 
-    if let (Some(duration), Some(skip_seconds)) = (args.duration, args.skip_seconds) {
-        if duration < skip_seconds {
-            eprintln!(
-                "Error: `duration` ({}) cannot be smaller than `skip_seconds` ({}).",
-                duration, skip_seconds
-            );
+    if let Some(duration) = args.duration {
+        if duration == 0 {
+            eprintln!("Error: `duration` cannot be less than `0` seconds.");
             std::process::exit(1);
+        } else if let Some(skip_seconds) = args.skip_seconds {
+            if duration <= skip_seconds {
+                eprintln!(
+                    "Error: `duration` ({}) cannot be smaller or equal than `skip_seconds` ({}).",
+                    duration, skip_seconds
+                );
+                std::process::exit(1);
+            }
         }
     }
 
