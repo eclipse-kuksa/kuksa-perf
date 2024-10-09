@@ -115,7 +115,10 @@ async fn main() -> Result<()> {
             args.duration, args.skip_seconds
         );
         std::process::exit(1);
-    } else if args.duration > 0 && args.skip_seconds > 0 {
+    } else if args.duration == 0 {
+        eprintln!("Error: `duration` cannot be less than `0` seconds.");
+        std::process::exit(1);
+    } else if args.duration > 0 {
         run_forever = false;
     }
 
