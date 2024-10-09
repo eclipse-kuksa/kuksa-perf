@@ -1,0 +1,28 @@
+{
+  "groups": [
+    {
+      "group_name": "Frame 1",
+      "cycle_time_ms": 10,
+      "signals": [
+        {
+          "path": "Vehicle.Speed"
+        }
+      ]
+    },
+    {
+      "group_name": "Frame 2",
+      "cycle_time_ms": 20,
+      "signals": [
+        {
+          "path": "Vehicle.IsBrokenDown"
+        },
+        {
+          "path": "Vehicle.IsMoving"
+        },
+        {
+          "path": "Vehicle.AverageSpeed"
+        }
+      ]
+    }
+  ]
+}

@@ -3,41 +3,46 @@
 Performance measurement app for KUKSA databroker.
 
 ```
-[00:00:00]  [========================================================================================================]    1000/1000    iterations
+[00:00:05] [================================================================================================================]       5/5       seconds
 
-Summary:
-  API: SdvDatabrokerV1
-  Elapsed time: 0.16 s
-  Rate limit: None
-  Sent: 1000 iterations * 1 signals = 1000 updates
-  Skipped: 10 updates
-  Received: 990 updates
-  Fastest:   0.042 ms
-  Slowest:   0.686 ms
-  Average:   0.130 ms
+Global Summary:
+  API: kuksa.val.v2
+  Total elapsed seconds: 5
+  Skipped test seconds: 2
+  Total signals: 101 signals
+  Sent: 412014 signal updates
+  Skipped: 160207 signal updates
+  Received: 251807 signal updates
+  Throughput: 83935 signal/second
+  95% in under: 0.294 ms
+  Fastest:   0.056 ms
+  Slowest:   4.187 ms
+  Average:   0.225 ms
 
 Latency histogram:
-    0.029 ms [689  ] |∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎
-    0.087 ms [37   ] |∎∎∎∎∎∎∎
-    0.145 ms [16   ] |∎∎∎
-    0.203 ms [56   ] |∎∎∎∎∎∎∎∎∎∎
-    0.261 ms [38   ] |∎∎∎∎∎∎∎
-    0.319 ms [31   ] |∎∎∎∎∎
-    0.377 ms [42   ] |∎∎∎∎∎∎∎∎
-    0.435 ms [22   ] |∎∎∎∎
-    0.493 ms [24   ] |∎∎∎∎
-    0.551 ms [18   ] |∎∎∎
-    0.609 ms [12   ] |∎∎
-    0.667 ms [5    ] |
+    0.188 ms [247553] |∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎
+    0.563 ms [1475 ] |∎
+    0.938 ms [143  ] |
+    1.313 ms [1083 ] |
+    1.688 ms [209  ] |
+    2.063 ms [70   ] |
+    2.438 ms [242  ] |
+    2.813 ms [514  ] |
+    3.188 ms [219  ] |
+    3.563 ms [119  ] |
+    3.938 ms [173  ] |
+    4.313 ms [7    ] |
 
 Latency distribution:
-  10% in under 0.047 ms
-  25% in under 0.049 ms
-  50% in under 0.052 ms
-  75% in under 0.177 ms
-  90% in under 0.376 ms
-  95% in under 0.477 ms
-  99% in under 0.608 ms
+  10% in under 0.154 ms
+  25% in under 0.180 ms
+  50% in under 0.199 ms
+  75% in under 0.224 ms
+  90% in under 0.263 ms
+  95% in under 0.294 ms
+  99% in under 1.205 ms
+
+
 
 ```
 
@@ -85,45 +90,131 @@ If running on MacOS:
 Usage: databroker-perf [OPTIONS]
 
 Options:
-  -i, --iterations <ITERATIONS>  Number of iterations to run [default: 1000]
-      --api <API>                Api of databroker [default: kuksa.val.v1] [possible values: kuksa.val.v1, sdv.databroker.v1]
-      --host <HOST>              Host address of databroker [default: http://127.0.0.1]
-      --port <PORT>              Port of databroker [default: 55555]
-      --skip <ITERATIONS>        Number of iterations to run (skip) before measuring the latency [default: 10]
-      --interval <MILLISECONDS>  Minimum interval in milliseconds between iterations [default: 0]
-      --config <FILE>            Path to configuration file
-      --run-forever              Run the measurements forever (until receiving a shutdown signal)
-  -v, --verbosity <LEVEL>        Verbosity level. Can be one of ERROR, WARN, INFO, DEBUG, TRACE [default: WARN]
-  -h, --help                     Print help
-  -V, --version                  Print version
+  -d, --duration <SECONDS>      Number of seconds to run
+      --api <API>               Api of databroker [default: kuksa.val.v1] [possible values: kuksa.val.v1, kuksa.val.v2, sdv.databroker.v1]
+      --host <HOST>             Host address of databroker [default: http://127.0.0.1]
+      --port <PORT>             Port of databroker [default: 55555]
+      --skip-seconds <SECONDS>  Seconds to run (skip) before measuring the latency
+      --detailed-output         Print more details in the summary result
+      --test-data-file <FILE>   Path to test data file
+  -v, --verbosity <LEVEL>       Verbosity level. Can be one of ERROR, WARN, INFO, DEBUG, TRACE [default: WARN]
+  -h, --help                    Print help
+  -V, --version                 Print version
 ```
 
 ```
 ./target/release/databroker-perf [OPTIONS]
 ```
 
+## Default test result output
+
+By default, the group results output will be summarised and contracted as follows:
+```
+Global Summary:
+  API: kuksa.val.v2
+  Total elapsed seconds: 5
+  Skipped test seconds: 2
+  Total signals: 55 signals
+  Sent: 5155 signal updates
+  Skipped: 2069 signal updates
+  Received: 3086 signal updates
+  Signal/Second: 1028 signal/s
+  95% in under: 0.215 ms
+  Fastest:   0.067 ms
+  Slowest:   0.295 ms
+  Average:   0.140 ms
+
+Latency histogram:
+    0.070 ms [45   ] |∎∎
+    0.090 ms [424  ] |∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎
+    0.110 ms [537  ] |∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎
+    0.130 ms [779  ] |∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎
+    0.150 ms [462  ] |∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎
+    0.170 ms [364  ] |∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎∎
+    0.190 ms [180  ] |∎∎∎∎∎∎∎∎∎∎∎
+    0.210 ms [164  ] |∎∎∎∎∎∎∎∎∎∎
+    0.230 ms [85   ] |∎∎∎∎∎
+    0.250 ms [33   ] |∎∎
+    0.270 ms [5    ] |
+    0.290 ms [8    ] |
+
+Latency distribution:
+  10% in under 0.092 ms
+  25% in under 0.112 ms
+  50% in under 0.132 ms
+  75% in under 0.164 ms
+  90% in under 0.199 ms
+  95% in under 0.215 ms
+  99% in under 0.253 ms
+
+```
+
+For a detailed output of the results, please enable the corresponding flag like:
+
+```
+./target/release/databroker-perf --detailed-output
+```
+
+## Group config file
+
+Databroker-perf creates two new gRPC channels for each group: one for the provider and one for the subscriber.
+Each provider will update its group signal values to the Databroker at the cycle time specified (in milliseconds) in the JSON configuration file provided.
+
+i. e.
+```
+{
+  "groups": [
+    {
+      "group_name": "Frame 1",
+      "cycle_time_ms": 10,
+      "signals": [
+        {
+          "path": "Vehicle.Speed"
+        }
+      ]
+    },
+    {
+      "group_name": "Frame 2",
+      "cycle_time_ms": 20,
+      "signals": [
+        {
+          "path": "Vehicle.IsBrokenDown"
+        },
+        {
+          "path": "Vehicle.IsMoving"
+        },
+        {
+          "path": "Vehicle.AverageSpeed"
+        }
+      ]
+    },
+    ...
+  ]
+}
+```
+
 ## Example with config file
 
 ```
-./target/release/databroker-perf --config configs/config.json
+./target/release/databroker-perf --test-data-file data/data_group_10.json
 ```
 
 If running on MacOS:
 
 ```
-./target/release/databroker-perf --config configs/config.json --port 55556
+./target/release/databroker-perf --test-data-file data/data_group_10.json --port 55556
 ```
 
 ## Example with API
 
 ```
-./target/release/databroker-perf --api sdv.databroker.v1 --config configs/config.json
+./target/release/databroker-perf --api sdv.databroker.v1 --test-data-file data/data_group_10.json
 ```
 
 If running on MacOS:
 
 ```
-./target/release/databroker-perf --api sdv.databroker.v1 --config configs/config.json --port 55556
+./target/release/databroker-perf --api sdv.databroker.v1 --test-data-file data/data_group_10.json --port 55556
 ```
 
 ## Contributing

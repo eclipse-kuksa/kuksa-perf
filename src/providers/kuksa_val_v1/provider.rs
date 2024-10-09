@@ -13,7 +13,9 @@
 
 use crate::config::Signal;
 use crate::providers::provider_trait::{Error, ProviderInterface, PublishError};
-use databroker_proto::kuksa::val::v1 as proto;
+use crate::types::DataValue;
+use databroker_proto::kuksa::val::v1::{self as proto, value_restriction};
+
 use tokio_stream::wrappers::ReceiverStream;
 
 use tonic::async_trait;
@@ -31,8 +33,14 @@ use std::collections::HashMap;
 
 pub struct Provider {
     tx: Sender<proto::StreamedUpdateRequest>,
-    data_types_map: HashMap<String, proto::DataType>,
+    metadata: HashMap<String, Metadata>,
     channel: Channel,
+    initial_signals_values: HashMap<String, DataValue>,
+}
+
+pub struct Metadata {
+    data_type: proto::DataType,
+    allowed: Option<Vec<String>>,
 }
 
 impl Provider {
@@ -42,8 +50,9 @@ impl Provider {
         tokio::spawn(Provider::run(rx, channel.clone()));
         Ok(Provider {
             tx,
-            data_types_map: HashMap::new(),
+            metadata: HashMap::new(),
             channel,
+            initial_signals_values: HashMap::new(),
         })
     }
 
@@ -89,23 +98,45 @@ impl ProviderInterface for Provider {
         signal_data: &[Signal],
         iteration: u64,
     ) -> Result<Instant, PublishError> {
-        let updates = Vec::from_iter(signal_data.iter().map(|signal| {
-            proto::EntryUpdate {
-                entry: Some(proto::DataEntry {
-                    path: signal.path.clone(),
-                    value: Some(proto::Datapoint {
-                        timestamp: None,
-                        value: Some(
-                            n_to_value(self.data_types_map.get(&signal.path).unwrap(), iteration)
-                                .unwrap(),
-                        ),
+        let updates = if iteration == 0 {
+            Vec::from_iter(signal_data.iter().map(|signal| {
+                let metadata = self.metadata.get(&signal.path).unwrap();
+                let mut new_value = n_to_value(metadata, iteration).unwrap();
+                if let Some(value) = self.initial_signals_values.get(&signal.path) {
+                    if DataValue::from(&Some(new_value.clone())) == *value {
+                        new_value = n_to_value(metadata, iteration + 1).unwrap();
+                    }
+                }
+                proto::EntryUpdate {
+                    entry: Some(proto::DataEntry {
+                        path: signal.path.clone(),
+                        value: Some(proto::Datapoint {
+                            timestamp: None,
+                            value: Some(new_value),
+                        }),
+                        actuator_target: None,
+                        metadata: None,
                     }),
-                    actuator_target: None,
-                    metadata: None,
-                }),
-                fields: vec![proto::Field::Value as i32],
-            }
-        }));
+                    fields: vec![proto::Field::Value.into()],
+                }
+            }))
+        } else {
+            Vec::from_iter(signal_data.iter().map(|signal| {
+                let metadata = self.metadata.get(&signal.path).unwrap();
+                proto::EntryUpdate {
+                    entry: Some(proto::DataEntry {
+                        path: signal.path.clone(),
+                        value: Some(proto::Datapoint {
+                            timestamp: None,
+                            value: Some(n_to_value(metadata, iteration + 1).unwrap()),
+                        }),
+                        actuator_target: None,
+                        metadata: None,
+                    }),
+                    fields: vec![proto::Field::Value.into()],
+                }
+            }))
+        };
 
         let payload = proto::StreamedUpdateRequest { updates };
 
@@ -125,7 +156,9 @@ impl ProviderInterface for Provider {
         let number_of_signals = signals.len();
 
         let mut client: proto::val_client::ValClient<Channel> =
-            proto::val_client::ValClient::new(self.channel.clone());
+            proto::val_client::ValClient::new(self.channel.clone())
+                .max_decoding_message_size(64 * 1024 * 1024)
+                .max_encoding_message_size(64 * 1024 * 1024);
 
         let mut signals_response = Vec::with_capacity(signals.len());
 
@@ -133,39 +166,46 @@ impl ProviderInterface for Provider {
             .iter()
             .map(|path| proto::EntryRequest {
                 path: path.to_string(),
-                view: proto::View::Metadata as i32,
-                fields: vec![proto::Field::Metadata.into()],
+                view: proto::View::Metadata.into(),
+                fields: vec![],
             })
             .collect();
 
-        let response = client.get(proto::GetRequest { entries }).await;
+        let response = client
+            .get(proto::GetRequest { entries })
+            .await
+            .map_err(|err| Error::MetadataError(format!("failed to fetch metadata: {}", err)))?;
 
-        match response {
-            Ok(entries) => {
-                for entry in entries.into_inner().entries.iter() {
-                    if let Some(metadata) = &entry.metadata {
-                        let data_type = metadata.data_type();
-                        self.data_types_map.insert(entry.path.clone(), data_type);
-                    }
-                    signals_response.push(Signal {
-                        path: entry.path.clone(),
-                    });
-                }
+        for entry in response.into_inner().entries.iter() {
+            if let Some(metadata) = &entry.metadata {
+                let data_type = metadata.data_type();
+                let allowed =
+                    metadata
+                        .value_restriction
+                        .as_ref()
+                        .and_then(|restriction| match &restriction.r#type {
+                            Some(value_restriction::Type::String(allowed)) => {
+                                Some(allowed.allowed_values.clone())
+                            }
+                            _ => None,
+                        });
+                self.metadata
+                    .insert(entry.path.clone(), Metadata { data_type, allowed });
             }
-            Err(status) => {
-                // Handle the Err case without returning a value
-                eprintln!("gRPC call failed with status: {:?}", status);
-            }
+            signals_response.push(Signal {
+                path: entry.path.clone(),
+            });
         }
 
         debug!(
             "received {} number of signals in metadata",
-            self.data_types_map.len()
+            self.metadata.len()
         );
-        if self.data_types_map.len() < number_of_signals {
+        if self.metadata.len() < number_of_signals {
             let missing_signals: Vec<_> = signals
                 .iter()
-                .filter(|signal| !self.data_types_map.contains_key(signal.as_str()))
+                .filter(|signal| !self.metadata.contains_key(signal.as_str()))
+                .take(20)
                 .collect();
 
             Err(Error::MetadataError(format!(
@@ -176,15 +216,27 @@ impl ProviderInterface for Provider {
             Ok(signals_response)
         }
     }
+
+    async fn set_initial_signals_values(
+        &mut self,
+        initial_signals_values: HashMap<String, DataValue>,
+    ) -> Result<(), Error> {
+        self.initial_signals_values = initial_signals_values;
+        Ok(())
+    }
 }
 
-pub fn n_to_value(
-    data_type: &proto::DataType,
-    n: u64,
-) -> Result<proto::datapoint::Value, PublishError> {
-    match data_type {
+pub fn n_to_value(metadata: &Metadata, n: u64) -> Result<proto::datapoint::Value, PublishError> {
+    match metadata.data_type {
         proto::DataType::Unspecified => Err(PublishError::Shutdown),
-        proto::DataType::String => Ok(proto::datapoint::Value::String(n.to_string())),
+        proto::DataType::String => match &metadata.allowed {
+            Some(allowed) => {
+                let index = n % allowed.len() as u64;
+                let value = allowed[index as usize].clone();
+                Ok(proto::datapoint::Value::String(value))
+            }
+            None => Ok(proto::datapoint::Value::String(n.to_string())),
+        },
         proto::DataType::Boolean => match n % 2 {
             0 => Ok(proto::datapoint::Value::Bool(true)),
             _ => Ok(proto::datapoint::Value::Bool(false)),
@@ -200,8 +252,15 @@ pub fn n_to_value(
         proto::DataType::Float => Ok(proto::datapoint::Value::Float(n as f32)),
         proto::DataType::Double => Ok(proto::datapoint::Value::Double(n as f64)),
         proto::DataType::StringArray => {
+            let value = match &metadata.allowed {
+                Some(allowed) => {
+                    let index = n % allowed.len() as u64;
+                    allowed[index as usize].clone()
+                }
+                None => n.to_string(),
+            };
             Ok(proto::datapoint::Value::StringArray(proto::StringArray {
-                values: vec![n.to_string()],
+                values: vec![value],
             }))
         }
         proto::DataType::BooleanArray => Ok(proto::datapoint::Value::BoolArray(proto::BoolArray {

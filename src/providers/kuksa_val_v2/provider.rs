@@ -13,8 +13,14 @@
 
 use crate::config::Signal;
 use crate::providers::provider_trait::{Error, ProviderInterface, PublishError};
+use crate::types::DataValue;
 
-use databroker_proto::kuksa::val::v2::{self as proto, open_provider_stream_request};
+use databroker_proto::kuksa::val::v2::{
+    self as proto, open_provider_stream_request,
+    open_provider_stream_response::Action::{
+        BatchActuateStreamRequest, ProvideActuationResponse, PublishValuesResponse,
+    },
+};
 
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -33,8 +39,16 @@ use std::collections::HashMap;
 
 pub struct Provider {
     tx: Sender<proto::OpenProviderStreamRequest>,
-    data_types_map: HashMap<String, (i32, proto::DataType)>,
+    metadata: HashMap<String, Metadata>,
+    id_to_path: HashMap<i32, String>,
     channel: Channel,
+    initial_signals_values: HashMap<String, DataValue>,
+}
+
+pub struct Metadata {
+    id: i32,
+    data_type: proto::DataType,
+    allowed_strings: Option<Vec<String>>,
 }
 
 impl Provider {
@@ -44,8 +58,10 @@ impl Provider {
         tokio::spawn(Provider::run(rx, channel.clone()));
         Ok(Provider {
             tx,
-            data_types_map: HashMap::new(),
+            metadata: HashMap::new(),
+            id_to_path: HashMap::new(),
             channel,
+            initial_signals_values: HashMap::new(),
         })
     }
 
@@ -55,8 +71,29 @@ impl Provider {
     ) -> Result<(), Error> {
         let mut client = proto::val_client::ValClient::new(channel);
         match client.open_provider_stream(ReceiverStream::new(rx)).await {
-            Ok(_response) => {
-                // No reasson to keep track of the responses
+            Ok(response) => {
+                let mut stream = response.into_inner();
+
+                let task = tokio::spawn(async move {
+                    while let Ok(Some(resp)) = stream.message().await {
+                        match resp.action {
+                            Some(ProvideActuationResponse(_)) => {}
+                            Some(PublishValuesResponse(response)) => {
+                                if !response.status.is_empty() {
+                                    if let Some((_, value)) = response.status.iter().next() {
+                                        return Err::<(), Error>(Error::PublishError(
+                                            PublishError::SendFailure(value.message.clone()),
+                                        ));
+                                    }
+                                }
+                            }
+                            Some(BatchActuateStreamRequest(_)) => {}
+                            None => {}
+                        }
+                    }
+                    Ok::<(), Error>(())
+                });
+                task.await.unwrap()?
             }
             Err(err) => {
                 error!("failed to setup provider stream: {}", err.message());
@@ -74,23 +111,40 @@ impl ProviderInterface for Provider {
         signal_data: &[Signal],
         iteration: u64,
     ) -> Result<Instant, PublishError> {
-        let datapoints = HashMap::from_iter(signal_data.iter().map(|path: &Signal| {
-            let (id, data_type) = *self.data_types_map.get(&path.path).unwrap();
-            (
-                id,
-                proto::Datapoint {
-                    timestamp: None,
-                    value_state: Some(proto::datapoint::ValueState::Value(
-                        n_to_value(&data_type, iteration).unwrap(),
-                    )),
-                },
-            )
-        }));
+        let datapoints = if iteration == 0 {
+            HashMap::from_iter(signal_data.iter().map(|path: &Signal| {
+                let metadata = self.metadata.get(&path.path).unwrap();
+                let mut new_value = n_to_value(metadata, iteration).unwrap();
+                if let Some(value) = self.initial_signals_values.get(&path.path) {
+                    if DataValue::from(&Some(new_value.clone())) == *value {
+                        new_value = n_to_value(metadata, iteration + 1).unwrap();
+                    }
+                }
+                (
+                    metadata.id,
+                    proto::Datapoint {
+                        timestamp: None,
+                        value: Some(new_value),
+                    },
+                )
+            }))
+        } else {
+            HashMap::from_iter(signal_data.iter().map(|path: &Signal| {
+                let metadata = self.metadata.get(&path.path).unwrap();
+                (
+                    metadata.id,
+                    proto::Datapoint {
+                        timestamp: None,
+                        value: Some(n_to_value(metadata, iteration + 1).unwrap()),
+                    },
+                )
+            }))
+        };
 
         let payload = proto::OpenProviderStreamRequest {
             action: Some(open_provider_stream_request::Action::PublishValuesRequest(
                 proto::PublishValuesRequest {
-                    request_id: iteration as i32,
+                    request_id: 1_i32,
                     datapoints,
                 },
             )),
@@ -112,7 +166,9 @@ impl ProviderInterface for Provider {
         let number_of_signals = signals.len();
 
         let mut client: proto::val_client::ValClient<Channel> =
-            proto::val_client::ValClient::new(self.channel.clone());
+            proto::val_client::ValClient::new(self.channel.clone())
+                .max_decoding_message_size(64 * 1024 * 1024)
+                .max_encoding_message_size(64 * 1024 * 1024);
 
         let mut signals_response = Vec::with_capacity(signals.len());
 
@@ -130,9 +186,32 @@ impl ProviderInterface for Provider {
             match response {
                 Ok(entries) => {
                     for metadata in entries.into_inner().metadata.iter() {
-                        let data_type = metadata.data_type();
-                        self.data_types_map
-                            .insert(signal_path.clone(), (metadata.id, data_type));
+                        self.metadata.insert(
+                            signal_path.clone(),
+                            Metadata {
+                                id: metadata.id,
+                                data_type: metadata.data_type(),
+                                allowed_strings: match &metadata.value_restriction {
+                                    Some(proto::ValueRestriction { r#type }) => match r#type {
+                                        Some(proto::value_restriction::Type::String(
+                                            string_array,
+                                        )) => Some(string_array.allowed_values.clone()),
+                                        Some(proto::value_restriction::Type::Signed(_)) => {
+                                            todo!()
+                                        }
+                                        Some(proto::value_restriction::Type::Unsigned(_)) => {
+                                            todo!()
+                                        }
+                                        Some(proto::value_restriction::Type::FloatingPoint(_)) => {
+                                            todo!()
+                                        }
+                                        None => None,
+                                    },
+                                    None => None,
+                                },
+                            },
+                        );
+                        self.id_to_path.insert(metadata.id, signal_path.clone());
                         signals_response.push(Signal {
                             path: signal_path.clone(),
                         });
@@ -147,12 +226,12 @@ impl ProviderInterface for Provider {
 
         debug!(
             "received {} number of signals in metadata",
-            self.data_types_map.len()
+            self.metadata.len()
         );
-        if self.data_types_map.len() < number_of_signals {
+        if self.metadata.len() < number_of_signals {
             let missing_signals: Vec<_> = signals
                 .iter()
-                .filter(|signal| !self.data_types_map.contains_key(signal.as_str()))
+                .filter(|signal| !self.metadata.contains_key(signal.as_str()))
                 .collect();
 
             Err(Error::MetadataError(format!(
@@ -163,14 +242,31 @@ impl ProviderInterface for Provider {
             Ok(signals_response)
         }
     }
+
+    async fn set_initial_signals_values(
+        &mut self,
+        initial_signals_values: HashMap<String, DataValue>,
+    ) -> Result<(), Error> {
+        self.initial_signals_values = initial_signals_values;
+        Ok(())
+    }
 }
 
-pub fn n_to_value(data_type: &proto::DataType, n: u64) -> Result<proto::Value, PublishError> {
-    match data_type {
+pub fn n_to_value(metadata: &Metadata, n: u64) -> Result<proto::Value, PublishError> {
+    match metadata.data_type {
+        proto::DataType::String => match &metadata.allowed_strings {
+            Some(allowed) => {
+                let index = n % allowed.len() as u64;
+                let value = allowed[index as usize].clone();
+                Ok(proto::Value {
+                    typed_value: Some(proto::value::TypedValue::String(value)),
+                })
+            }
+            None => Ok(proto::Value {
+                typed_value: Some(proto::value::TypedValue::String(n.to_string())),
+            }),
+        },
         proto::DataType::Unspecified => Err(PublishError::Shutdown),
-        proto::DataType::String => Ok(proto::Value {
-            typed_value: Some(proto::value::TypedValue::String(n.to_string())),
-        }),
         proto::DataType::Boolean => match n % 2 {
             0 => Ok(proto::Value {
                 typed_value: Some(proto::value::TypedValue::Bool(true)),
@@ -209,11 +305,20 @@ pub fn n_to_value(data_type: &proto::DataType, n: u64) -> Result<proto::Value, P
         proto::DataType::Double => Ok(proto::Value {
             typed_value: Some(proto::value::TypedValue::Double(n as f64)),
         }),
-        proto::DataType::StringArray => Ok(proto::Value {
-            typed_value: Some(proto::value::TypedValue::StringArray(proto::StringArray {
-                values: vec![n.to_string()],
-            })),
-        }),
+        proto::DataType::StringArray => {
+            let value = match &metadata.allowed_strings {
+                Some(allowed) => {
+                    let index = n % allowed.len() as u64;
+                    allowed[index as usize].clone()
+                }
+                None => n.to_string(),
+            };
+            Ok(proto::Value {
+                typed_value: Some(proto::value::TypedValue::StringArray(proto::StringArray {
+                    values: vec![value],
+                })),
+            })
+        }
         proto::DataType::BooleanArray => Ok(proto::Value {
             typed_value: Some(proto::value::TypedValue::BoolArray(proto::BoolArray {
                 values: vec![matches!(n % 2, 0)],

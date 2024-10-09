@@ -26,6 +26,8 @@ use tonic::transport::Channel;
 
 use crate::{config::Signal, measure::Api};
 
+use crate::types::DataValue;
+
 pub struct Subscriber {
     signals: Arc<HashMap<String, Sender<Instant>>>,
 }
@@ -46,7 +48,12 @@ pub enum Error {
 }
 
 impl Subscriber {
-    pub async fn new(channel: Channel, signals: Vec<Signal>, api: &Api) -> Result<Self, Error> {
+    pub async fn new(
+        channel: Channel,
+        signals: Vec<Signal>,
+        api: &Api,
+        initial_values_sender: tokio::sync::mpsc::Sender<HashMap<String, DataValue>>,
+    ) -> Result<Self, Error> {
         let signals_c = Arc::new(HashMap::from_iter(signals.clone().into_iter().map(
             |signal| {
                 let (sender, _) = broadcast::channel(32);
@@ -54,7 +61,14 @@ impl Subscriber {
             },
         )));
 
-        Subscriber::start(channel, signals, signals_c.clone(), api).await?;
+        Subscriber::start(
+            channel,
+            signals,
+            signals_c.clone(),
+            api,
+            initial_values_sender,
+        )
+        .await?;
 
         Ok(Self { signals: signals_c })
     }
@@ -70,18 +84,6 @@ impl Subscriber {
         )
     }
 
-    // pub async fn wait_for(&self, path: &str) -> Result<Instant, Error> {
-    //     let mut subscription = match self.signals.get(path) {
-    //         Some(sender) => Ok(sender.subscribe()),
-    //         None => Err(Error::SignalNotFound(path.to_string())),
-    //     }?;
-
-    //     Ok(subscription
-    //         .recv()
-    //         .await
-    //         .map_err(|err| Error::RecvError(err.to_string()))?)
-    // }
-
     pub fn wait_for(&self, path: &str) -> Result<Receiver<Instant>, Error> {
         match self.signals.get(path) {
             Some(sender) => Ok(sender.subscribe()),
@@ -94,13 +96,14 @@ impl Subscriber {
         signals: Vec<Signal>,
         signals_map: Arc<HashMap<String, Sender<Instant>>>,
         api: &Api,
+        initial_values_sender: tokio::sync::mpsc::Sender<HashMap<String, DataValue>>,
     ) -> Result<(), Error> {
         if *api == Api::SdvDatabrokerV1 {
             Self::handle_sdv_databroker_v1(channel, signals, signals_map).await
         } else if *api == Api::KuksaValV1 {
-            Self::handle_kuksa_val_v1(channel, signals, signals_map).await
+            Self::handle_kuksa_val_v1(channel, signals, signals_map, initial_values_sender).await
         } else {
-            Self::handle_kuksa_val_v2(channel, signals, signals_map).await
+            Self::handle_kuksa_val_v2(channel, signals, signals_map, initial_values_sender).await
         }
     }
 
@@ -161,6 +164,7 @@ impl Subscriber {
         channel: Channel,
         signals: Vec<Signal>,
         signals_map: Arc<HashMap<String, Sender<Instant>>>,
+        initial_values_sender: tokio::sync::mpsc::Sender<HashMap<String, DataValue>>,
     ) -> Result<(), Error> {
         let entries: Vec<kuksa_val_v1::SubscribeEntry> = signals
             .iter()
@@ -181,10 +185,23 @@ impl Subscriber {
 
                 // Ignore first message as the first notification is not triggered by a provider
                 // but instead contains the current value.
-                let _ = stream
+                let first_current_value = stream
                     .message()
                     .await
                     .map_err(|err| Error::SubscriptionFailed(err.to_string()))?;
+
+                let mut initial_signals_value: HashMap<String, DataValue> = HashMap::new();
+                for entry in first_current_value.unwrap().updates {
+                    if let Some(value) = entry.entry.clone().unwrap().value {
+                        initial_signals_value.insert(
+                            entry.entry.unwrap().path.clone(),
+                            DataValue::from(&value.value),
+                        );
+                    }
+                }
+
+                let result = initial_values_sender.send(initial_signals_value).await;
+                assert!(result.is_ok());
 
                 tokio::spawn(async move {
                     loop {
@@ -224,6 +241,7 @@ impl Subscriber {
         channel: Channel,
         signals: Vec<Signal>,
         signals_map: Arc<HashMap<String, Sender<Instant>>>,
+        initial_values_sender: tokio::sync::mpsc::Sender<HashMap<String, DataValue>>,
     ) -> Result<(), Error> {
         let mut paths = Vec::with_capacity(signals.len());
         for signal in signals {
@@ -242,10 +260,18 @@ impl Subscriber {
 
                 // Ignore first message as the first notification is not triggered by a provider
                 // but instead contains the current value.
-                let _ = stream
+                let first_current_value = stream
                     .message()
                     .await
                     .map_err(|err| Error::SubscriptionFailed(err.to_string()))?;
+
+                let mut initial_signals_value: HashMap<String, DataValue> = HashMap::new();
+                for (path, datapoint) in first_current_value.unwrap().entries {
+                    initial_signals_value.insert(path, DataValue::from(&datapoint.value));
+                }
+
+                let result = initial_values_sender.send(initial_signals_value).await;
+                assert!(result.is_ok());
 
                 tokio::spawn(async move {
                     loop {

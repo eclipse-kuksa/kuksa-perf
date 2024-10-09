@@ -11,15 +11,13 @@
 * SPDX-License-Identifier: Apache-2.0
 ********************************************************************************/
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Parser;
+use config::Group;
 use measure::{perform_measurement, Api, MeasurementConfig};
 use shutdown::setup_shutdown_handler;
-use std::{
-    cmp::{max, min},
-    time::Duration,
-};
-use tonic::transport::channel::Endpoint;
+use std::collections::HashSet;
+
 use utils::read_config;
 
 mod config;
@@ -27,20 +25,15 @@ mod measure;
 mod providers;
 mod shutdown;
 mod subscriber;
+mod types;
 mod utils;
 
 #[derive(Parser)]
 #[clap(author, version, about)]
 struct Args {
-    /// Number of iterations to run.
-    #[clap(
-        long,
-        short,
-        display_order = 1,
-        default_value_t = 1000,
-        conflicts_with = "run_forever"
-    )]
-    iterations: u64,
+    /// Number of seconds to run.
+    #[clap(long, short, display_order = 1, value_name = "SECONDS")]
+    duration: Option<u64>,
 
     /// Api of databroker.
     #[clap(long, display_order = 2, default_value = "kuksa.val.v1", value_parser = clap::builder::PossibleValuesParser::new(["kuksa.val.v1", "kuksa.val.v2", "sdv.databroker.v1"]))]
@@ -54,36 +47,22 @@ struct Args {
     #[clap(long, display_order = 4, default_value_t = 55555)]
     port: u64,
 
-    /// Number of iterations to run (skip) before measuring the latency.
-    #[clap(
-        long,
-        display_order = 5,
-        value_name = "ITERATIONS",
-        default_value_t = 10
-    )]
-    skip: u64,
+    /// Seconds to run (skip) before measuring the latency.
+    #[clap(long, display_order = 5, value_name = "SECONDS")]
+    skip_seconds: Option<u64>,
 
-    /// Minimum interval in milliseconds between iterations.
+    /// Print more details in the summary result
     #[clap(
         long,
         display_order = 6,
-        value_name = "MILLISECONDS",
-        default_value_t = 0
+        value_name = "Detailed ouput result",
+        default_value_t = false
     )]
-    interval: u16,
+    detailed_output: bool,
 
-    /// Path to configuration file
-    #[clap(long = "config", display_order = 7, value_name = "FILE")]
-    config_file: Option<String>,
-
-    /// Run the measurements forever (until receiving a shutdown signal).
-    #[clap(
-        long,
-        action = clap::ArgAction::SetTrue,
-        display_order = 8,
-        conflicts_with = "iterations"
-    )]
-    run_forever: bool,
+    /// Path to test data file
+    #[clap(long = "test-data-file", display_order = 7, value_name = "FILE")]
+    test_data_file: Option<String>,
 
     /// Verbosity level. Can be one of ERROR, WARN, INFO, DEBUG, TRACE.
     #[clap(
@@ -104,19 +83,18 @@ fn setup_logging(verbosity_level: log::Level) -> Result<()> {
     Ok(())
 }
 
-fn create_databroker_endpoint(host: String, port: u64) -> Result<Endpoint> {
-    let databroker_address = format!("{}:{}", host, port);
+fn check_if_duplicate_paths(groups: &Vec<Group>) -> bool {
+    let mut seen_paths: HashSet<String> = HashSet::new();
 
-    let endpoint = tonic::transport::Channel::from_shared(databroker_address.clone())
-        .with_context(|| "Failed to parse server url")?;
-    let endpoint = endpoint
-        .initial_stream_window_size(1000 * 3 * 128 * 1024) // 20 MB stream window size
-        .initial_connection_window_size(1000 * 3 * 128 * 1024) // 20 MB connection window size
-        .keep_alive_timeout(Duration::from_secs(1)) // 60 seconds keepalive time
-        .keep_alive_timeout(Duration::from_secs(1)) // 20 seconds keepalive timeout
-        .timeout(Duration::from_secs(1));
-
-    Ok(endpoint)
+    for group in groups {
+        for signal in &group.signals {
+            if !seen_paths.insert(signal.path.clone()) {
+                println!("Error: Duplicate path found: {}", signal.path);
+                return false;
+            }
+        }
+    }
+    true
 }
 
 #[tokio::main]
@@ -127,6 +105,21 @@ async fn main() -> Result<()> {
 
     let shutdown_handler = setup_shutdown_handler();
 
+    if let Some(duration) = args.duration {
+        if duration == 0 {
+            eprintln!("Error: `duration` cannot be less than `0` seconds.");
+            std::process::exit(1);
+        } else if let Some(skip_seconds) = args.skip_seconds {
+            if duration <= skip_seconds {
+                eprintln!(
+                    "Error: `duration` ({}) cannot be smaller or equal than `skip_seconds` ({}).",
+                    duration, skip_seconds
+                );
+                std::process::exit(1);
+            }
+        }
+    }
+
     let mut api = Api::KuksaValV1;
     if args.api.contains("sdv.databroker.v1") {
         api = Api::SdvDatabrokerV1;
@@ -134,23 +127,22 @@ async fn main() -> Result<()> {
         api = Api::KuksaValV2;
     }
 
-    let config_signals = read_config(args.config_file.as_ref())?;
+    let config_groups = read_config(args.test_data_file.as_ref())?;
 
-    // Skip at most _iterations_ number of iterations
-    let skip = max(0, min(args.iterations, args.skip));
-
-    let endpoint = create_databroker_endpoint(args.host, args.port)?;
+    if !check_if_duplicate_paths(&config_groups) {
+        std::process::exit(1);
+    }
 
     let measurement_config = MeasurementConfig {
-        endpoint,
-        config_signals,
-        iterations: args.iterations,
-        interval: args.interval,
-        skip,
+        host: args.host,
+        port: args.port,
+        duration: args.duration,
+        interval: 0,
+        skip_seconds: args.skip_seconds,
         api,
-        run_forever: args.run_forever,
+        detailed_output: args.detailed_output,
     };
 
-    perform_measurement(measurement_config, shutdown_handler).await?;
+    perform_measurement(measurement_config, config_groups, shutdown_handler).await?;
     Ok(())
 }
