@@ -16,10 +16,7 @@ use clap::Parser;
 use config::Group;
 use measure::{perform_measurement, Api, MeasurementConfig};
 use shutdown::setup_shutdown_handler;
-use std::{
-    cmp::{max, min},
-    collections::HashSet,
-};
+use std::collections::HashSet;
 
 use utils::read_config;
 
@@ -35,8 +32,8 @@ mod utils;
 #[clap(author, version, about)]
 struct Args {
     /// Number of seconds to run.
-    #[clap(long, short, display_order = 1, default_value_t = 0)]
-    duration: u64,
+    #[clap(long, short, display_order = 1, value_name = "SECONDS")]
+    duration: Option<u64>,
 
     /// Api of databroker.
     #[clap(long, display_order = 2, default_value = "kuksa.val.v1", value_parser = clap::builder::PossibleValuesParser::new(["kuksa.val.v1", "kuksa.val.v2", "sdv.databroker.v1"]))]
@@ -51,8 +48,8 @@ struct Args {
     port: u64,
 
     /// Seconds to run (skip) before measuring the latency.
-    #[clap(long, display_order = 5, value_name = "DURATION", default_value_t = 0)]
-    skip_seconds: u64,
+    #[clap(long, display_order = 5, value_name = "SECONDS")]
+    skip_seconds: Option<u64>,
 
     /// Print more details in the summary result
     #[clap(
@@ -86,18 +83,18 @@ fn setup_logging(verbosity_level: log::Level) -> Result<()> {
     Ok(())
 }
 
-fn check_duplicate_paths(groups: &Vec<Group>) {
+fn check_if_duplicate_paths(groups: &Vec<Group>) -> bool {
     let mut seen_paths: HashSet<String> = HashSet::new();
 
     for group in groups {
         for signal in &group.signals {
             if !seen_paths.insert(signal.path.clone()) {
-                // If the insert fails, it means the path is a duplicate
-                eprintln!("Error: Duplicate path found: {}", signal.path);
-                std::process::exit(1); // Exit the program with status code 1
+                println!("Error: Duplicate path found: {}", signal.path);
+                return false;
             }
         }
     }
+    true
 }
 
 #[tokio::main]
@@ -108,18 +105,14 @@ async fn main() -> Result<()> {
 
     let shutdown_handler = setup_shutdown_handler();
 
-    let mut run_forever = true;
-    if args.duration < args.skip_seconds {
-        eprintln!(
-            "Error: `duration` ({}) cannot be smaller than `skip_seconds` ({}).",
-            args.duration, args.skip_seconds
-        );
-        std::process::exit(1);
-    } else if args.duration == 0 {
-        eprintln!("Error: `duration` cannot be less than `0` seconds.");
-        std::process::exit(1);
-    } else if args.duration > 0 {
-        run_forever = false;
+    if let (Some(duration), Some(skip_seconds)) = (args.duration, args.skip_seconds) {
+        if duration < skip_seconds {
+            eprintln!(
+                "Error: `duration` ({}) cannot be smaller than `skip_seconds` ({}).",
+                duration, skip_seconds
+            );
+            std::process::exit(1);
+        }
     }
 
     let mut api = Api::KuksaValV1;
@@ -131,18 +124,17 @@ async fn main() -> Result<()> {
 
     let config_groups = read_config(args.test_data_file.as_ref())?;
 
-    check_duplicate_paths(&config_groups);
-    // Skip at most _iterations_ number of iterations
-    let skip_seconds = max(0, min(args.duration, args.skip_seconds));
+    if !check_if_duplicate_paths(&config_groups) {
+        std::process::exit(1);
+    }
 
     let measurement_config = MeasurementConfig {
         host: args.host,
         port: args.port,
         duration: args.duration,
         interval: 0,
-        skip_seconds,
+        skip_seconds: args.skip_seconds,
         api,
-        run_forever,
         detailed_output: args.detailed_output,
     };
 

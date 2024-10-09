@@ -11,7 +11,7 @@
 * SPDX-License-Identifier: Apache-2.0
 ********************************************************************************/
 
-use anyhow::{anyhow, Context, Ok, Result};
+use anyhow::{Context, Ok, Result};
 use console::Term;
 use hdrhistogram::Histogram;
 use log::debug;
@@ -28,8 +28,6 @@ use crate::{
     measure::{MeasurementConfig, MeasurementResult},
 };
 
-const MAX_NUMBER_OF_GROUPS: usize = 10;
-
 pub fn read_config(config_file: Option<&String>) -> Result<Vec<Group>> {
     match config_file {
         Some(filename) => {
@@ -39,13 +37,6 @@ pub fn read_config(config_file: Option<&String>) -> Result<Vec<Group>> {
                 .with_context(|| format!("Failed to open configuration file '{}'", filename))?;
             let config: Config = from_reader(file)
                 .with_context(|| format!("Failed to parse configuration file '{}'", filename))?;
-
-            if config.groups.len() > MAX_NUMBER_OF_GROUPS {
-                return Err(anyhow!(
-                    "The number of groups exceeds the maximum allowed limit of {}",
-                    MAX_NUMBER_OF_GROUPS
-                ));
-            }
 
             Ok(config.groups)
         }
@@ -159,28 +150,19 @@ pub fn write_global_output(
     writeln!(stdout, "\n\nGlobal Summary:")?;
     writeln!(stdout, "  API: {}", measurement_config.api)?;
 
-    if measurement_config.run_forever {
-        writeln!(stdout, "  Run forever: Activated")?;
-
-        global_end_time /= measurement_results.len() as u32;
-        writeln!(
-            stdout,
-            "  Total elapsed seconds: {}",
-            global_end_time.as_secs()
-        )?;
+    let total_elapsed_seconds = if let Some(duration) = measurement_config.duration {
+        duration
     } else {
-        writeln!(
-            stdout,
-            "  Total elapsed seconds: {}",
-            measurement_config.duration
-        )?;
+        global_end_time /= measurement_results.len() as u32;
+        global_end_time.as_secs()
+    };
+
+    writeln!(stdout, "  Total elapsed seconds: {}", total_elapsed_seconds)?;
+
+    if let Some(skip_seconds) = measurement_config.skip_seconds {
+        writeln!(stdout, "  Skipped test seconds: {}", skip_seconds)?;
     }
 
-    writeln!(
-        stdout,
-        "  Skipped test seconds: {}",
-        measurement_config.skip_seconds
-    )?;
     writeln!(stdout, "  Total signals: {} signals", global_signals_len,)?;
     writeln!(stdout, "  Sent: {} signal updates", global_signals_sent,)?;
     writeln!(
@@ -190,19 +172,17 @@ pub fn write_global_output(
     )?;
     writeln!(stdout, "  Received: {} signal updates", global_hist.len())?;
 
-    if measurement_config.run_forever {
-        writeln!(
-            stdout,
-            "  Signal/Second: {} signal/s",
-            global_hist.len() / (global_end_time.as_secs() - measurement_config.skip_seconds)
-        )?;
+    let elapsed_seconds = if let Some(duration) = measurement_config.duration {
+        duration - measurement_config.skip_seconds.unwrap()
     } else {
-        writeln!(
-            stdout,
-            "  Signal/Second: {} signal/s",
-            global_hist.len() / (measurement_config.duration - measurement_config.skip_seconds)
-        )?;
-    }
+        global_end_time.as_secs() - measurement_config.skip_seconds.unwrap()
+    };
+
+    writeln!(
+        stdout,
+        "  Signal/Second: {} signal/s",
+        global_hist.len() / elapsed_seconds
+    )?;
 
     writeln!(
         stdout,
@@ -275,21 +255,15 @@ pub fn write_output(measurement_result: &MeasurementResult) -> Result<()> {
         measurement_context.hist.len()
     )?;
 
-    if measurement_config.run_forever {
-        writeln!(
-            stdout,
-            "  Signal/Second: {} signal/s",
-            measurement_context.hist.len()
-                / (total_duration.as_secs() - measurement_config.skip_seconds)
-        )?;
+    let throughput = if let Some(duration) = measurement_config.duration {
+        measurement_context.hist.len() / (duration - measurement_config.skip_seconds.unwrap())
     } else {
-        writeln!(
-            stdout,
-            "  Signal/Second: {} signal/s",
-            measurement_context.hist.len()
-                / (measurement_config.duration - measurement_config.skip_seconds)
-        )?;
-    }
+        measurement_context.hist.len()
+            / (total_duration.as_secs() - measurement_config.skip_seconds.unwrap())
+    };
+
+    writeln!(stdout, "  Throughput: {} signal/s", throughput)?;
+
     writeln!(
         stdout,
         "  95% in under: {:.3} ms",

@@ -25,7 +25,7 @@ use crate::utils::{write_global_output, write_output};
 
 use anyhow::{Context, Result};
 use hdrhistogram::Histogram;
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
 use std::collections::HashMap;
 use std::fmt;
@@ -54,11 +54,10 @@ pub struct Provider {
 pub struct MeasurementConfig {
     pub host: String,
     pub port: u64,
-    pub duration: u64,
+    pub duration: Option<u64>,
     pub interval: u16,
-    pub skip_seconds: u64,
+    pub skip_seconds: Option<u64>,
     pub api: Api,
-    pub run_forever: bool,
     pub detailed_output: bool,
 }
 
@@ -66,10 +65,9 @@ pub struct MeasurementContext {
     pub measurement_config: MeasurementConfig,
     pub group_name: String,
     pub shutdown_handler: Arc<RwLock<ShutdownHandler>>,
-    pub provider: Provider,
+    pub provider: Arc<RwLock<Provider>>,
     pub signals: Vec<Signal>,
-    pub subscriber: Subscriber,
-    pub progress: ProgressBar,
+    pub subscriber: Arc<RwLock<Subscriber>>,
     pub hist: Histogram<u64>,
     pub running_hist: Histogram<u64>,
 }
@@ -165,93 +163,87 @@ pub async fn perform_measurement(
     config_groups: Vec<Group>,
     shutdown_handler: ShutdownHandler,
 ) -> Result<()> {
-    let shutdown_handler_ref = Arc::new(RwLock::new(shutdown_handler));
+    // Initialize provider
+    let provider_endpoint =
+        create_databroker_endpoint(measurement_config.host.clone(), measurement_config.port)?;
 
+    let mut provider = create_provider(&provider_endpoint, &measurement_config.api).await?;
+
+    // Validate metadata signals
+
+    let all_signals: Vec<Signal> = config_groups
+        .clone()
+        .into_iter()
+        .flat_map(|group| group.signals)
+        .collect();
+
+    let signals = provider
+        .provider_interface
+        .as_mut()
+        .validate_signals_metadata(all_signals.as_slice())
+        .await
+        .unwrap();
+
+    // Initilize subscriber and initialize initial signal values.
+    let subscriber_endpoint =
+        create_databroker_endpoint(measurement_config.host.clone(), measurement_config.port)?;
+
+    let (initial_values_sender, mut initial_values_reciever) =
+        tokio::sync::mpsc::channel::<HashMap<String, DataValue>>(10);
+
+    let subscriber = setup_subscriber(
+        &subscriber_endpoint,
+        signals,
+        &measurement_config.api,
+        initial_values_sender,
+    )
+    .await?;
+
+    // Receive the initial signal values
+    if let Some(initial_signal_values) = initial_values_reciever.recv().await {
+        let result = provider
+            .provider_interface
+            .as_mut()
+            .set_initial_signals_values(initial_signal_values)
+            .await;
+        assert!(result.is_ok());
+    }
+
+    // Create references to be used among tokio::tasks
+    let shutdown_handler_ref = Arc::new(RwLock::new(shutdown_handler));
+    let provider_ref = Arc::new(RwLock::new(provider));
+    let subscriber_ref = Arc::new(RwLock::new(subscriber));
+
+    // Structure to collect tokio tasks of signals groups
     let mut tasks: JoinSet<Result<MeasurementResult>> = JoinSet::new();
 
-    let multi_progress_bar = MultiProgress::new();
-
     for group in config_groups.clone() {
-        let shutdown_handler = Arc::clone(&shutdown_handler_ref);
-
-        let (initial_values_sender, mut initial_values_reciever) =
-            tokio::sync::mpsc::channel::<HashMap<String, DataValue>>(10);
-
-        let provider_endpoint =
-            create_databroker_endpoint(measurement_config.host.clone(), measurement_config.port)?;
-        let subscriber_endpoint =
-            create_databroker_endpoint(measurement_config.host.clone(), measurement_config.port)?;
+        // Create MeasurmentContext for each group
         let mut measurement_config = measurement_config.clone();
 
         measurement_config.interval = group.cycle_time_ms;
-        let mut provider = create_provider(&provider_endpoint, &measurement_config.api).await?;
-
-        let signals = provider
-            .provider_interface
-            .as_mut()
-            .validate_signals_metadata(&group.signals)
-            .await
-            .unwrap();
-
-        let subscriber = setup_subscriber(
-            &subscriber_endpoint,
-            signals.clone(),
-            &measurement_config.api,
-            initial_values_sender,
-        )
-        .await?;
-
-        // Receive the initial signal values
-        if let Some(initial_signal_values) = initial_values_reciever.recv().await {
-            let result = provider
-                .provider_interface
-                .as_mut()
-                .set_initial_signals_values(initial_signal_values)
-                .await;
-            assert!(result.is_ok());
-        }
 
         let hist = Histogram::<u64>::new_with_bounds(1, 60 * 60 * 1000 * 1000, 3)?;
         let running_hist = Histogram::<u64>::new_with_bounds(1, 60 * 60 * 1000 * 1000, 3)?;
-
-        let start_time = SystemTime::now();
-
-        let progress = if measurement_config.run_forever {
-            ProgressBar::new_spinner().with_style(
-                // TODO: Add average latency etc...
-                ProgressStyle::with_template("[{elapsed_precise}] {wide_msg} {pos:>7} seconds")
-                    .unwrap(),
-            )
-        } else {
-            ProgressBar::new(measurement_config.duration).with_style(
-                ProgressStyle::with_template(
-                    "[{elapsed_precise}] {msg} [{wide_bar}] {pos:>7}/{len:7} seconds",
-                )
-                .unwrap()
-                .progress_chars("=> "),
-            )
-        };
-        multi_progress_bar.add(progress.clone());
 
         let group_name = group.group_name.clone();
 
         let mut measurement_context = MeasurementContext {
             measurement_config,
             group_name: group_name.clone(),
-            shutdown_handler,
-            provider,
-            signals,
-            subscriber,
-            progress,
+            shutdown_handler: Arc::clone(&shutdown_handler_ref),
+            provider: Arc::clone(&provider_ref),
+            signals: group.signals,
+            subscriber: Arc::clone(&subscriber_ref),
             hist,
             running_hist,
         };
 
+        // Spawn a task for each group
+        let start_time = SystemTime::now();
         tasks.spawn(async move {
             let (iterations_executed, signals_skipped) =
                 measurement_loop(&mut measurement_context).await.unwrap();
-
-            measurement_context.progress.finish();
 
             Ok(MeasurementResult {
                 measurement_context,
@@ -262,25 +254,57 @@ pub async fn perform_measurement(
         });
     }
 
+    // Initialize progress bars
+    let (progress_bar, duration) = match measurement_config.duration {
+        Some(duration_value) => {
+            let duration_in_ms = duration_value * 1000; // Convert to milliseconds
+            let progress_bar = ProgressBar::new(duration_value).with_style(
+                ProgressStyle::with_template(
+                    "[{elapsed_precise}] [{wide_bar}] {pos:>7}/{len:7} seconds",
+                )
+                .unwrap()
+                .progress_chars("=> "),
+            );
+            (progress_bar, Duration::from_millis(duration_in_ms)) // Initialize Duration from milliseconds
+        }
+        None => {
+            println!("Databroker-perf running... to cancel execution please press 'Ctrl+C'");
+            let progress_bar = ProgressBar::new_spinner().with_style(
+                ProgressStyle::with_template("[{elapsed_precise}] [{spinner}] ")
+                    .unwrap()
+                    .tick_chars("⠁⠁⠉⠙⠚⠒⠂⠂⠒⠲⠴⠤⠄⠄⠤⠠⠠⠤⠦⠖⠒⠐⠐⠒⠓⠋⠉⠈⠈ "),
+            );
+            (progress_bar, Duration::default()) // Default duration when no duration is provided
+        }
+    };
+
+    let run_forever = measurement_config.duration.is_none();
+
     let start_run = Instant::now();
-    let duration = measurement_config.duration * 1000;
+    let progress_bar_task = progress_bar.clone();
 
     // Stop the execution of tasks when the test duration is exceeded.
     task::spawn(async move {
-        while (measurement_config.run_forever || start_run.elapsed().as_millis() < duration.into())
+        while (run_forever || start_run.elapsed().as_millis() < duration.as_millis())
             && shutdown_handler_ref
                 .read()
                 .await
                 .state
                 .running
                 .load(Ordering::SeqCst)
-        {}
-        println!("Finished");
+        {
+            if !run_forever {
+                progress_bar_task.set_position(start_run.elapsed().as_secs());
+            } else if start_run.elapsed().as_millis() % 100 == 0 {
+                progress_bar_task.tick();
+            }
+        }
         if shutdown_handler_ref.write().await.trigger.send(()).is_err() {
             println!("failed to trigger shutdown");
         }
     });
 
+    // Collect measurements results from each group
     let mut measurements_results = Vec::<MeasurementResult>::new();
     while let Some(received) = tasks.join_next().await {
         match received {
@@ -298,6 +322,9 @@ pub async fn perform_measurement(
         }
     }
 
+    progress_bar.finish();
+
+    // Output results
     write_global_output(&measurement_config, &measurements_results).unwrap();
 
     if measurement_config.detailed_output {
@@ -316,11 +343,27 @@ pub async fn perform_measurement(
 async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
     let mut iterations = 0;
     let mut skipped = 0;
-    let mut last_running_hist = Instant::now();
     let start_run = Instant::now();
 
-    let run_milliseconds = ctx.measurement_config.duration * 1000;
-    let skip_milliseconds = ctx.measurement_config.skip_seconds * 1000;
+    let mut run_forever = false;
+
+    let run_milliseconds = ctx
+        .measurement_config
+        .duration
+        .map(|duration| duration * 1000)
+        .unwrap_or_else(|| {
+            run_forever = true;
+            0
+        });
+
+    let skip_milliseconds = ctx
+        .measurement_config
+        .skip_seconds
+        .map(|skip_seconds| skip_seconds * 1000)
+        .unwrap_or_else(|| {
+            run_forever = true;
+            0
+        });
 
     let mut interval_to_run = if ctx.measurement_config.interval == 0 {
         None
@@ -331,8 +374,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
     };
 
     loop {
-        if !ctx.measurement_config.run_forever
-            && start_run.elapsed().as_millis() >= run_milliseconds.into()
+        if !run_forever && start_run.elapsed().as_millis() >= run_milliseconds.into()
             || !ctx
                 .shutdown_handler
                 .read()
@@ -341,19 +383,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
                 .running
                 .load(Ordering::SeqCst)
         {
-            println!("Stoopped");
             break;
-        }
-
-        if last_running_hist.elapsed().as_millis() >= 500 {
-            ctx.progress.set_message(format!(
-                "Group: {} | Cycle(ms): {} | Current latency: {:.3} ms",
-                ctx.group_name,
-                ctx.measurement_config.interval,
-                ctx.running_hist.mean() / 1000.
-            ));
-            ctx.running_hist.reset();
-            last_running_hist = Instant::now();
         }
 
         if let Some(interval_to_run) = interval_to_run.as_mut() {
@@ -367,14 +397,15 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
             }
         }
 
-        let provider = ctx.provider.provider_interface.as_ref();
-        let publish_task = provider.publish(&ctx.signals, iterations);
+        let provider = ctx.provider.read().await;
+        let provider_interface = provider.provider_interface.as_ref();
+        let publish_task = provider_interface.publish(&ctx.signals, iterations);
 
         let mut subscriber_tasks: JoinSet<Result<Instant, subscriber::Error>> = JoinSet::new();
 
         for signal in &ctx.signals {
             // TODO: return an awaitable thingie (wrapping the Receiver<Instant>)
-            let mut sub = ctx.subscriber.wait_for(&signal.path)?;
+            let mut sub = ctx.subscriber.read().await.wait_for(&signal.path)?;
             let mut shutdown_triggered = ctx.shutdown_handler.write().await.trigger.subscribe();
 
             subscriber_tasks.spawn(async move {
@@ -430,7 +461,6 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
         }
 
         iterations += 1;
-        ctx.progress.set_position(start_run.elapsed().as_secs());
     }
     Ok((iterations, skipped))
 }
