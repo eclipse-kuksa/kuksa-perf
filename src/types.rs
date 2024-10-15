@@ -11,15 +11,23 @@
 * SPDX-License-Identifier: Apache-2.0
 ********************************************************************************/
 
-#[derive(Clone)]
-pub struct Signal {
-    pub path: String,
-}
-
-impl Signal {
-    pub fn new(path: impl ToString) -> Self {
-        Self {
-            path: path.to_string(),
-        }
-    }
+#[derive(Debug, Clone, PartialEq)]
+pub enum DataValue {
+    NotAvailable,
+    Bool(bool),
+    String(String),
+    Int32(i32),
+    Int64(i64),
+    Uint32(u32),
+    Uint64(u64),
+    Float(f32),
+    Double(f64),
+    BoolArray(Vec<bool>),
+    StringArray(Vec<String>),
+    Int32Array(Vec<i32>),
+    Int64Array(Vec<i64>),
+    Uint32Array(Vec<u32>),
+    Uint64Array(Vec<u64>),
+    FloatArray(Vec<f32>),
+    DoubleArray(Vec<f64>),
 }

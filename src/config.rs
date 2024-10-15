@@ -13,11 +13,17 @@
 
 use serde::Deserialize;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Config {
-    pub signals: Vec<Signal>,
+    pub groups: Vec<Group>,
 }
 
+#[derive(Deserialize, Clone)]
+pub struct Group {
+    pub group_name: String,
+    pub cycle_time_ms: u16,
+    pub signals: Vec<Signal>,
+}
 #[derive(Deserialize, Clone)]
 pub struct Signal {
     pub path: String,

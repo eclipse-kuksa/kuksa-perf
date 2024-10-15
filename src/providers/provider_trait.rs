@@ -11,13 +11,15 @@
 * SPDX-License-Identifier: Apache-2.0
 ********************************************************************************/
 
+use std::collections::HashMap;
+
 use log::error;
 use tonic::async_trait;
 
 use thiserror::Error;
 use tokio::time::Instant;
 
-use crate::config::Signal;
+use crate::{config::Signal, types::DataValue};
 
 #[async_trait]
 pub trait ProviderInterface: Send + Sync {
@@ -28,6 +30,10 @@ pub trait ProviderInterface: Send + Sync {
     ) -> Result<Instant, PublishError>;
     async fn validate_signals_metadata(&mut self, signals: &[Signal])
         -> Result<Vec<Signal>, Error>;
+    async fn set_initial_signals_values(
+        &mut self,
+        initial_signals_values: HashMap<String, DataValue>,
+    ) -> Result<(), Error>;
 }
 
 #[derive(Error, Debug)]
