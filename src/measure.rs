@@ -11,15 +11,20 @@
 * SPDX-License-Identifier: Apache-2.0
 ********************************************************************************/
 
-use crate::providers::kuksa_val_v1::provider as kuksa_val_v1;
-use crate::providers::kuksa_val_v2::provider as kuksa_val_v2;
+use crate::providers::kuksa_val_v1::provider as p_kuksa_val_v1;
+use crate::providers::kuksa_val_v2::provider as p_kuksa_val_v2;
+use crate::providers::sdv_databroker_v1::provider as p_sdv_databroker_v1;
+
 use crate::providers::provider_trait::{ProviderInterface, PublishError};
-use crate::providers::sdv_databroker_v1::provider as sdv_databroker_v1;
+
+use crate::subscribers::kuksa_val_v1::subscriber as s_kuksa_val_v1;
+use crate::subscribers::kuksa_val_v2::subscriber as s_kuksa_val_v2;
+use crate::subscribers::sdv_databroker_v1::subscriber as s_sdv_databroker_v1;
 
 use crate::config::{Group, Signal};
 
 use crate::shutdown::ShutdownHandler;
-use crate::subscriber::{self, Subscriber};
+use crate::subscribers::subscriber_trait::{Error, SubscriberInterface};
 use crate::types::DataValue;
 use crate::utils::{write_global_output, write_output};
 
@@ -53,6 +58,10 @@ pub struct Provider {
     pub provider_interface: Box<dyn ProviderInterface>,
 }
 
+pub struct Subscriber {
+    pub subscriber_interface: Box<dyn SubscriberInterface>,
+}
+
 #[derive(Clone)]
 pub struct MeasurementConfig {
     pub host: String,
@@ -63,6 +72,7 @@ pub struct MeasurementConfig {
     pub skip_seconds: Option<u64>,
     pub api: Api,
     pub detailed_output: bool,
+    pub buffer_size: Option<u32>,
 }
 
 pub struct MeasurementContext {
@@ -74,6 +84,7 @@ pub struct MeasurementContext {
     pub subscriber: Subscriber,
     pub hist: Histogram<u64>,
     pub running_hist: Histogram<u64>,
+    pub latency_series: Vec<u64>,
 }
 
 pub struct MeasurementResult {
@@ -97,12 +108,36 @@ async fn create_subscriber(
     channel: Channel,
     signals: Vec<Signal>,
     api: &Api,
-    initial_values_sender: Sender<HashMap<String, DataValue>>,
+    initial_values_sender: Sender<HashMap<Signal, DataValue>>,
+    buffer_size: Option<u32>,
 ) -> Result<Subscriber> {
-    let subscriber =
-        subscriber::Subscriber::new(channel, signals, api, initial_values_sender).await?;
-
-    Ok(subscriber)
+    if *api == Api::KuksaValV2 {
+        let subscriber = s_kuksa_val_v2::Subscriber::new(
+            channel,
+            signals,
+            initial_values_sender,
+            buffer_size.unwrap_or(1),
+        )
+        .await
+        .unwrap();
+        Ok(Subscriber {
+            subscriber_interface: Box::new(subscriber),
+        })
+    } else if *api == Api::SdvDatabrokerV1 {
+        let subscriber = s_sdv_databroker_v1::Subscriber::new(channel, signals)
+            .await
+            .unwrap();
+        Ok(Subscriber {
+            subscriber_interface: Box::new(subscriber),
+        })
+    } else {
+        let subscriber = s_kuksa_val_v1::Subscriber::new(channel, signals, initial_values_sender)
+            .await
+            .unwrap();
+        Ok(Subscriber {
+            subscriber_interface: Box::new(subscriber),
+        })
+    }
 }
 
 async fn create_unix_socket_channel(path: impl AsRef<Path>) -> Result<Channel> {
@@ -145,19 +180,19 @@ async fn create_tcp_channel(host: String, port: u64) -> Result<Channel> {
 fn create_provider(channel: Channel, api: &Api) -> Result<Provider> {
     if *api == Api::KuksaValV2 {
         let provider =
-            kuksa_val_v2::Provider::new(channel).with_context(|| "Failed to setup provider")?;
+            p_kuksa_val_v2::Provider::new(channel).with_context(|| "Failed to setup provider")?;
         Ok(Provider {
             provider_interface: Box::new(provider),
         })
     } else if *api == Api::SdvDatabrokerV1 {
-        let provider = sdv_databroker_v1::Provider::new(channel)
+        let provider = p_sdv_databroker_v1::Provider::new(channel)
             .with_context(|| "Failed to setup provider")?;
         Ok(Provider {
             provider_interface: Box::new(provider),
         })
     } else {
         let provider =
-            kuksa_val_v1::Provider::new(channel).with_context(|| "Failed to setup provider")?;
+            p_kuksa_val_v1::Provider::new(channel).with_context(|| "Failed to setup provider")?;
         Ok(Provider {
             provider_interface: Box::new(provider),
         })
@@ -195,23 +230,28 @@ pub async fn perform_measurement(
         let mut provider = create_provider(provider_channel, &measurement_config.api)?;
 
         // Validate metadata signals
-        let signals = provider
+        let ve = provider
             .provider_interface
             .as_mut()
             .validate_signals_metadata(group.signals.as_slice())
-            .await
-            .unwrap();
+            .await;
 
+        let mut signals = Vec::new();
+        match ve {
+            Ok(vec) => signals = vec,
+            Err(e) => println!("Error: {}", e),
+        }
         // Initilize subscriber and initialize initial signal values.
         let (initial_values_sender, mut initial_values_reciever) =
-            tokio::sync::mpsc::channel::<HashMap<String, DataValue>>(10);
+            tokio::sync::mpsc::channel::<HashMap<Signal, DataValue>>(10);
 
         let subscriber_channel = subscriber_channel.clone();
         let subscriber = create_subscriber(
             subscriber_channel,
-            signals,
+            signals.clone(),
             &measurement_config.api,
             initial_values_sender,
+            measurement_config.buffer_size,
         )
         .await?;
 
@@ -240,10 +280,11 @@ pub async fn perform_measurement(
             group_name: group_name.clone(),
             shutdown_handler: Arc::clone(&shutdown_handler_ref),
             provider,
-            signals: group.signals,
+            signals,
             subscriber,
             hist,
             running_hist,
+            latency_series: Vec::new(),
         };
 
         // Spawn a task for each group
@@ -398,21 +439,22 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
         let provider = ctx.provider.provider_interface.as_ref();
         let publish_task = provider.publish(&ctx.signals, iterations);
 
-        let mut subscriber_tasks: JoinSet<Result<Instant, subscriber::Error>> = JoinSet::new();
+        let mut subscriber_tasks: JoinSet<Result<Instant, Error>> = JoinSet::new();
 
         for signal in &ctx.signals {
             // TODO: return an awaitable thingie (wrapping the Receiver<Instant>)
-            let mut sub = ctx.subscriber.wait_for(&signal.path)?;
+            let subscriber = ctx.subscriber.subscriber_interface.as_ref();
+            let mut receiver = subscriber.wait_for(signal).await.unwrap();
             let mut shutdown_triggered = ctx.shutdown_handler.write().await.trigger.subscribe();
 
             subscriber_tasks.spawn(async move {
                 // Wait for notification or shutdown
                 select! {
-                    instant = sub.recv() => {
-                        instant.map_err(|err| subscriber::Error::RecvFailed(err.to_string()))
+                    instant = receiver.recv() => {
+                        instant.map_err(|err| Error::RecvFailed(err.to_string()))
                     }
                     _ = shutdown_triggered.recv() => {
-                        Err(subscriber::Error::Shutdown)
+                        Err(Error::Shutdown)
                     }
                 }
             });
@@ -441,9 +483,10 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
                         .try_into()
                         .unwrap();
                     ctx.hist.record(latency)?;
+                    ctx.latency_series.push(latency);
                     ctx.running_hist.record(latency)?;
                 }
-                Ok(Err(subscriber::Error::Shutdown)) => {
+                Ok(Err(Error::Shutdown)) => {
                     break;
                 }
                 Ok(Err(err)) => {

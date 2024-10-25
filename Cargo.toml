@@ -19,7 +19,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-databroker-proto = { git = "https://github.com/eclipse-kuksa/kuksa-databroker.git", branch = "feature/databroker-api-v2", package = "databroker-proto" }
+databroker-proto = { git = "https://github.com/eclipse-kuksa/kuksa-databroker.git", branch = "main", package = "databroker-proto" }
 hdrhistogram = { version = "7.5.4", default-features = false }
 tokio = { version = "1.20", features = ["full"] }
 tokio-stream = { version = "0.1.8" }
@@ -42,3 +42,4 @@ log = "0.4"
 stderrlog = "0.6"
 indicatif = "0.17"
 console = "0.15"
+csv = "1.1"

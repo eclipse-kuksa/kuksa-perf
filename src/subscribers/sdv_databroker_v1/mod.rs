@@ -11,21 +11,4 @@
 * SPDX-License-Identifier: Apache-2.0
 ********************************************************************************/
 
-use serde::Deserialize;
-
-#[derive(Deserialize, Clone)]
-pub struct Config {
-    pub groups: Vec<Group>,
-}
-
-#[derive(Deserialize, Clone)]
-pub struct Group {
-    pub group_name: String,
-    pub cycle_time_ms: u16,
-    pub signals: Vec<Signal>,
-}
-#[derive(Deserialize, Clone, PartialEq, Eq, Hash)]
-pub struct Signal {
-    pub path: String,
-    pub id: Option<i32>,
-}
+pub mod subscriber;
