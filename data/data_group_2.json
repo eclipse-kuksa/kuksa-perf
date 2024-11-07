@@ -2,7 +2,7 @@
   "groups": [
     {
       "group_name": "Frame 1",
-      "cycle_time_ms": 10,
+      "cycle_time_microseconds": 10,
       "signals": [
         {
           "path": "Vehicle.Speed"
@@ -11,7 +11,7 @@
     },
     {
       "group_name": "Frame 2",
-      "cycle_time_ms": 20,
+      "cycle_time_microseconds": 20,
       "signals": [
         {
           "path": "Vehicle.IsBrokenDown"

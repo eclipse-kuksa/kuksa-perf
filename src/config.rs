@@ -21,7 +21,7 @@ pub struct Config {
 #[derive(Deserialize, Clone)]
 pub struct Group {
     pub group_name: String,
-    pub cycle_time_μs: u32,
+    pub cycle_time_microseconds: u32,
     pub signals: Vec<Signal>,
 }
 #[derive(Deserialize, Clone)]
