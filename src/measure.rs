@@ -55,7 +55,7 @@ pub struct MeasurementConfig {
     pub host: String,
     pub port: u64,
     pub duration: Option<u64>,
-    pub interval: u16,
+    pub interval: u32,
     pub skip_seconds: Option<u64>,
     pub api: Api,
     pub detailed_output: bool,
