@@ -2,7 +2,7 @@
   "groups": [
     {
       "group_name": "Frame 1",
-      "cycle_time_microseconds": 1000,
+      "cycle_time_microseconds": 500,
       "signals": [
         {
           "path": "Vehicle.Speed"
