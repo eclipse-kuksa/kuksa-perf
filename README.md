@@ -158,7 +158,7 @@ For a detailed output of the results, please enable the corresponding flag like:
 ## Group config file
 
 Databroker-perf creates two new gRPC channels for each group: one for the provider and one for the subscriber.
-Each provider will update its group signal values to the Databroker at the cycle time specified (in milliseconds) in the JSON configuration file provided.
+Each provider will update its group signal values to the Databroker at the cycle time specified (in microseconds) in the JSON configuration file provided.
 
 i. e.
 ```
