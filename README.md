@@ -166,7 +166,7 @@ i. e.
   "groups": [
     {
       "group_name": "Frame 1",
-      "cycle_time_μs": 1000,
+      "cycle_time_microseconds": 1000,
       "signals": [
         {
           "path": "Vehicle.Speed"
@@ -175,7 +175,7 @@ i. e.
     },
     {
       "group_name": "Frame 2",
-      "cycle_time_μs": 2000,
+      "cycle_time_microseconds": 2000,
       "signals": [
         {
           "path": "Vehicle.IsBrokenDown"
