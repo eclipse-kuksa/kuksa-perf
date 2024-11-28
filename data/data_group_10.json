@@ -2,7 +2,7 @@
   "groups": [
     {
       "group_name": "Frame 1",
-      "cycle_time_ms": 10,
+      "cycle_time_microseconds": 200,
       "signals": [
         {
           "path": "Vehicle.Speed"
@@ -11,7 +11,7 @@
     },
     {
       "group_name": "Frame 2",
-      "cycle_time_ms": 20,
+      "cycle_time_microseconds": 300,
       "signals": [
         {
           "path": "Vehicle.IsBrokenDown"
@@ -26,7 +26,7 @@
     },
     {
       "group_name": "Frame 3",
-      "cycle_time_ms": 30,
+      "cycle_time_microseconds": 400,
       "signals": [
         {
           "path": "Vehicle.Powertrain.CombustionEngine.MAP"
@@ -44,7 +44,7 @@
     },
     {
       "group_name": "Frame 4",
-      "cycle_time_ms": 40,
+      "cycle_time_microseconds": 500,
       "signals": [
         {
           "path": "Vehicle.Body.Windshield.Front.Wiping.System.IsWiping"
@@ -62,7 +62,7 @@
     },
     {
       "group_name": "Frame 5",
-      "cycle_time_ms": 50,
+      "cycle_time_microseconds": 600,
       "signals": [
         {
           "path": "Vehicle.Body.Windshield.Front.Wiping.System.IsBlocked"
@@ -80,7 +80,7 @@
     },
     {
       "group_name": "Frame 6",
-      "cycle_time_ms": 60,
+      "cycle_time_microseconds": 700,
       "signals": [
         {
           "path": "Vehicle.Body.Windshield.Front.WasherFluid.Level"
@@ -101,7 +101,7 @@
     },
     {
       "group_name": "Frame 7",
-      "cycle_time_ms": 70,
+      "cycle_time_microseconds": 800,
       "signals": [
         {
           "path": "Vehicle.Body.Windshield.Rear.Wiping.System.IsPositionReached"
@@ -122,7 +122,7 @@
     },
     {
       "group_name": "Frame 8",
-      "cycle_time_ms": 80,
+      "cycle_time_microseconds": 900,
       "signals": [
         {
           "path": "Vehicle.Body.Windshield.Front.Wiping.System.TargetPosition"
@@ -143,7 +143,7 @@
     },
     {
       "group_name": "Frame 9",
-      "cycle_time_ms": 90,
+      "cycle_time_microseconds": 1000,
       "signals": [
         {
           "path": "Vehicle.Body.Windshield.Rear.Wiping.System.TargetPosition"
@@ -170,7 +170,7 @@
     },
     {
       "group_name": "Frame 10",
-      "cycle_time_ms": 100,
+      "cycle_time_microseconds": 1100,
       "signals": [
         {
           "path": "Vehicle.Body.Lights.Backup.IsOn"

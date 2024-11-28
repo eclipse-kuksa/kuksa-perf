@@ -68,7 +68,7 @@ pub struct MeasurementConfig {
     pub port: u64,
     pub unix_socket_path: Option<String>,
     pub duration: Option<u64>,
-    pub interval: u16,
+    pub interval: u32,
     pub skip_seconds: Option<u64>,
     pub api: Api,
     pub detailed_output: bool,
@@ -268,7 +268,7 @@ pub async fn perform_measurement(
         // Create MeasurmentContext for each group
         let mut measurement_config = measurement_config.clone();
 
-        measurement_config.interval = group.cycle_time_ms;
+        measurement_config.interval = group.cycle_time_microseconds;
 
         let hist = Histogram::<u64>::new_with_bounds(1, 60 * 60 * 1000 * 1000, 3)?;
         let running_hist = Histogram::<u64>::new_with_bounds(1, 60 * 60 * 1000 * 1000, 3)?;
@@ -408,7 +408,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
     let mut interval_to_run = if ctx.measurement_config.interval == 0 {
         None
     } else {
-        Some(tokio::time::interval(Duration::from_millis(
+        Some(tokio::time::interval(Duration::from_micros(
             ctx.measurement_config.interval.into(),
         )))
     };

@@ -48,7 +48,7 @@ pub fn read_config(config_file: Option<&String>) -> Result<Vec<Group>> {
             Ok(vec![
                 Group {
                     group_name: String::from("Group A"),
-                    cycle_time_ms: 0,
+                    cycle_time_microseconds: 0,
                     signals: vec![Signal {
                         path: String::from("Vehicle.Speed"),
                         id: None,
@@ -56,7 +56,7 @@ pub fn read_config(config_file: Option<&String>) -> Result<Vec<Group>> {
                 },
                 Group {
                     group_name: String::from("Group B"),
-                    cycle_time_ms: 0,
+                    cycle_time_microseconds: 0,
                     signals: vec![Signal {
                         path: String::from("Vehicle.IsBrokenDown"),
                         id: None,
@@ -64,7 +64,7 @@ pub fn read_config(config_file: Option<&String>) -> Result<Vec<Group>> {
                 },
                 Group {
                     group_name: String::from("Group C"),
-                    cycle_time_ms: 0,
+                    cycle_time_microseconds: 0,
                     signals: vec![
                         Signal {
                             path: String::from("Vehicle.Body.Windshield.Front.Wiping.Intensity"),
