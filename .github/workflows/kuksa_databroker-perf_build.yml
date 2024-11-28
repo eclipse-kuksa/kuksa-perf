@@ -124,7 +124,7 @@ jobs:
     name: Create multiarch container
     runs-on: ubuntu-latest
 
-    needs: [build]
+    needs: [build, check_ghcr_push]
 
     steps:
     - uses: actions/checkout@v4
