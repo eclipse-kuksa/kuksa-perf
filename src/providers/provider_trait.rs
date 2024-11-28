@@ -32,7 +32,7 @@ pub trait ProviderInterface: Send + Sync {
         -> Result<Vec<Signal>, Error>;
     async fn set_initial_signals_values(
         &mut self,
-        initial_signals_values: HashMap<String, DataValue>,
+        initial_signals_values: HashMap<Signal, DataValue>,
     ) -> Result<(), Error>;
 }
 
@@ -56,4 +56,7 @@ pub enum PublishError {
 
     #[error("DataType can not be mapped to datapoint value")]
     DataTypeError,
+
+    #[error("Metadata error")]
+    MetadataError,
 }

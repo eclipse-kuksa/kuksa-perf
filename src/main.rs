@@ -24,7 +24,7 @@ mod config;
 mod measure;
 mod providers;
 mod shutdown;
-mod subscriber;
+mod subscribers;
 mod types;
 mod utils;
 
@@ -63,6 +63,10 @@ struct Args {
         default_value_t = false
     )]
     detailed_output: bool,
+
+    /// kuksa.val.v2 subscription buffer_size
+    #[clap(long, display_order = 7)]
+    buffer_size: Option<u32>,
 
     /// Path to test data file
     #[clap(long = "test-data-file", display_order = 7, value_name = "FILE")]
@@ -124,11 +128,16 @@ async fn main() -> Result<()> {
         }
     }
 
-    let mut api = Api::KuksaValV1;
-    if args.api.contains("sdv.databroker.v1") {
-        api = Api::SdvDatabrokerV1;
+    let api = if args.api.contains("sdv.databroker.v1") {
+        Api::SdvDatabrokerV1
     } else if args.api.contains("kuksa.val.v2") {
-        api = Api::KuksaValV2;
+        Api::KuksaValV2
+    } else {
+        Api::KuksaValV1
+    };
+
+    if args.buffer_size.is_some() && matches!(api, Api::SdvDatabrokerV1 | Api::KuksaValV1) {
+        println!("Warning: buffer_size will be ignored, only supported for kuksa.val.v2 API");
     }
 
     let config_groups = read_config(args.test_data_file.as_ref())?;
@@ -146,6 +155,7 @@ async fn main() -> Result<()> {
         skip_seconds: args.skip_seconds,
         api,
         detailed_output: args.detailed_output,
+        buffer_size: args.buffer_size,
     };
 
     perform_measurement(measurement_config, config_groups, shutdown_handler).await?;
