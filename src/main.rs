@@ -47,6 +47,10 @@ struct Args {
     #[clap(long, display_order = 4, default_value_t = 55555)]
     port: u64,
 
+    /// Unix socket path of databroker
+    #[clap(long = "unix-socket", display_order = 5)]
+    unix_socket_path: Option<String>,
+
     /// Seconds to run (skip) before measuring the latency.
     #[clap(long, display_order = 5, value_name = "SECONDS")]
     skip_seconds: Option<u64>,
@@ -136,6 +140,7 @@ async fn main() -> Result<()> {
     let measurement_config = MeasurementConfig {
         host: args.host,
         port: args.port,
+        unix_socket_path: args.unix_socket_path,
         duration: args.duration,
         interval: 0,
         skip_seconds: args.skip_seconds,
