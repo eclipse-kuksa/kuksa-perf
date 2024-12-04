@@ -15,7 +15,7 @@ use crate::providers::kuksa_val_v1::provider as p_kuksa_val_v1;
 use crate::providers::kuksa_val_v2::provider as p_kuksa_val_v2;
 use crate::providers::sdv_databroker_v1::provider as p_sdv_databroker_v1;
 
-use crate::providers::provider_trait::{ProviderInterface, PublishError};
+use crate::providers::provider_trait::ProviderInterface;
 
 use crate::subscribers::kuksa_val_v1::subscriber as s_kuksa_val_v1;
 use crate::subscribers::kuksa_val_v2::subscriber as s_kuksa_val_v2;
@@ -426,12 +426,8 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
         }
 
         if let Some(interval_to_run) = interval_to_run.as_mut() {
-            let mut shutdown_triggered = ctx.shutdown_handler.write().await.trigger.subscribe();
             tokio::select! {
                 _ = interval_to_run.tick() => {
-                }
-                _ = shutdown_triggered.recv() => {
-                    break;
                 }
             }
         }
@@ -445,7 +441,6 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
             // TODO: return an awaitable thingie (wrapping the Receiver<Instant>)
             let subscriber = ctx.subscriber.subscriber_interface.as_ref();
             let mut receiver = subscriber.wait_for(signal).await.unwrap();
-            let mut shutdown_triggered = ctx.shutdown_handler.write().await.trigger.subscribe();
 
             subscriber_tasks.spawn(async move {
                 // Wait for notification or shutdown
@@ -453,20 +448,13 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
                     instant = receiver.recv() => {
                         instant.map_err(|err| Error::RecvFailed(err.to_string()))
                     }
-                    _ = shutdown_triggered.recv() => {
-                        Err(Error::Shutdown)
-                    }
                 }
             });
         }
 
         let published = {
-            let mut shutdown_triggered = ctx.shutdown_handler.write().await.trigger.subscribe();
             select! {
-                published = publish_task => published,
-                _ = shutdown_triggered.recv() => {
-                    Err(PublishError::Shutdown)
-                }
+                published = publish_task => published
             }
         }?;
 
@@ -485,9 +473,6 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
                     ctx.hist.record(latency)?;
                     ctx.latency_series.push(latency);
                     ctx.running_hist.record(latency)?;
-                }
-                Ok(Err(Error::Shutdown)) => {
-                    break;
                 }
                 Ok(Err(err)) => {
                     error!("{}", err.to_string());

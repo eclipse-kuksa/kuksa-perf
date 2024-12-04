@@ -31,9 +31,6 @@ pub enum Error {
 
     #[error("signal '{0}' not found")]
     SignalNotFound(String),
-
-    #[error("Received shutdown signal")]
-    Shutdown,
 }
 
 #[async_trait]
