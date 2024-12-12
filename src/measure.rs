@@ -35,13 +35,12 @@ use log::error;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::{
     sync::atomic::Ordering,
     time::{Duration, SystemTime},
 };
 use tokio::net::UnixStream;
-use tokio::sync::{mpsc::Sender, RwLock};
+use tokio::sync::mpsc::Sender;
 use tokio::task;
 use tokio::{select, task::JoinSet, time::Instant};
 use tonic::transport::Channel;
@@ -78,7 +77,7 @@ pub struct MeasurementConfig {
 pub struct MeasurementContext {
     pub measurement_config: MeasurementConfig,
     pub group_name: String,
-    pub shutdown_handler: Arc<RwLock<ShutdownHandler>>,
+    pub shutdown_handler: ShutdownHandler,
     pub provider: Provider,
     pub signals: Vec<Signal>,
     pub subscriber: Subscriber,
@@ -218,9 +217,6 @@ pub async fn perform_measurement(
         }
     };
 
-    // Create references to be used among tokio::tasks
-    let shutdown_handler_ref = Arc::new(RwLock::new(shutdown_handler));
-
     // Structure to collect tokio tasks of signals groups
     let mut tasks: JoinSet<Result<MeasurementResult>> = JoinSet::new();
 
@@ -278,7 +274,7 @@ pub async fn perform_measurement(
         let mut measurement_context = MeasurementContext {
             measurement_config,
             group_name: group_name.clone(),
-            shutdown_handler: Arc::clone(&shutdown_handler_ref),
+            shutdown_handler: shutdown_handler.clone(),
             provider,
             signals,
             subscriber,
@@ -331,15 +327,11 @@ pub async fn perform_measurement(
     let start_run = Instant::now();
     let progress_bar_task = progress_bar.clone();
 
+    let shutdown_handler_clone = shutdown_handler.clone();
     // Stop the execution of tasks when the test duration is exceeded.
     task::spawn(async move {
         while (run_forever || start_run.elapsed().as_millis() < duration.as_millis())
-            && shutdown_handler_ref
-                .read()
-                .await
-                .state
-                .running
-                .load(Ordering::SeqCst)
+            && shutdown_handler_clone.state.running.load(Ordering::SeqCst)
         {
             if !run_forever {
                 progress_bar_task.set_position(start_run.elapsed().as_secs());
@@ -347,13 +339,11 @@ pub async fn perform_measurement(
                 progress_bar_task.tick();
             }
         }
-        shutdown_handler_ref
-            .write()
-            .await
+        shutdown_handler_clone
             .state
             .running
             .store(false, Ordering::SeqCst);
-        if shutdown_handler_ref.write().await.trigger.send(()).is_err() {
+        if shutdown_handler_clone.trigger.send(()).is_err() {
             println!("failed to trigger shutdown");
         }
     });
@@ -414,19 +404,12 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
     };
 
     loop {
-        if !ctx
-            .shutdown_handler
-            .read()
-            .await
-            .state
-            .running
-            .load(Ordering::SeqCst)
-        {
+        if !ctx.shutdown_handler.state.running.load(Ordering::SeqCst) {
             break;
         }
 
         if let Some(interval_to_run) = interval_to_run.as_mut() {
-            let mut shutdown_triggered = ctx.shutdown_handler.write().await.trigger.subscribe();
+            let mut shutdown_triggered = ctx.shutdown_handler.trigger.subscribe();
             tokio::select! {
                 _ = interval_to_run.tick() => {
                 }
@@ -445,7 +428,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
             // TODO: return an awaitable thingie (wrapping the Receiver<Instant>)
             let subscriber = ctx.subscriber.subscriber_interface.as_ref();
             let mut receiver = subscriber.wait_for(signal).await.unwrap();
-            let mut shutdown_triggered = ctx.shutdown_handler.write().await.trigger.subscribe();
+            let mut shutdown_triggered = ctx.shutdown_handler.trigger.subscribe();
 
             subscriber_tasks.spawn(async move {
                 // Wait for notification or shutdown
@@ -461,7 +444,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
         }
 
         let published = {
-            let mut shutdown_triggered = ctx.shutdown_handler.write().await.trigger.subscribe();
+            let mut shutdown_triggered = ctx.shutdown_handler.trigger.subscribe();
             select! {
                 published = publish_task => published,
                 _ = shutdown_triggered.recv() => {
