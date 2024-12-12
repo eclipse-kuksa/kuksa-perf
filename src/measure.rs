@@ -500,7 +500,9 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
             }
         }
 
-        iterations += 1;
+        if ctx.shutdown_handler.state.running.load(Ordering::SeqCst) {
+            iterations += 1;
+        }
     }
     Ok((iterations, skipped))
 }
