@@ -22,6 +22,7 @@ use tokio::{
     sync::broadcast::{self, Sender},
 };
 
+#[derive(Clone)]
 pub struct ShutdownHandler {
     pub trigger: Sender<()>,
     pub state: Arc<State>,
