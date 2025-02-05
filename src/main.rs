@@ -22,9 +22,9 @@ use utils::read_config;
 
 mod config;
 mod measure;
-mod triggering_ends;
-mod shutdown;
 mod receiving_ends;
+mod shutdown;
+mod triggering_ends;
 mod types;
 mod utils;
 

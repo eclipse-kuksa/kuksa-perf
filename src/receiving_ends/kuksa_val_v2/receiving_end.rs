@@ -12,9 +12,11 @@
 ********************************************************************************/
 
 use databroker_proto::kuksa::val::v2::{
-    self as kuksa_val_v2, open_provider_stream_response::Action::{
+    self as kuksa_val_v2,
+    open_provider_stream_response::Action::{
         BatchActuateStreamRequest, ProvideActuationResponse, PublishValuesResponse,
-    }, SignalId
+    },
+    SignalId,
 };
 use std::{collections::HashMap, sync::Arc};
 
@@ -25,7 +27,11 @@ use tokio::{
 };
 use tonic::{async_trait, transport::Channel};
 
-use crate::{config::Signal, measure::Direction, receiving_ends::receiving_end_trait::{Error, ReceivingEndInterface}};
+use crate::{
+    config::Signal,
+    measure::Direction,
+    receiving_ends::receiving_end_trait::{Error, ReceivingEndInterface},
+};
 
 use crate::types::DataValue;
 
@@ -86,35 +92,35 @@ impl ReceivingEnd {
         signals_map: Arc<HashMap<i32, Sender<Instant>>>,
         initial_values_sender: tokio::sync::mpsc::Sender<HashMap<Signal, DataValue>>,
         buffer_size: u32,
-        direction: &Direction
+        direction: &Direction,
     ) -> Result<(), Error> {
         let mut client = kuksa_val_v2::val_client::ValClient::new(channel);
 
         let mut ids = Vec::with_capacity(signals.len());
         let mut ids_: Vec<SignalId> = Vec::with_capacity(signals.len());
-        
-        match direction{
+
+        match direction {
             Direction::Read => {
                 for signal in signals {
                     ids.push(signal.id.unwrap());
                 }
-        
+
                 let args = tonic::Request::new(kuksa_val_v2::SubscribeByIdRequest {
                     buffer_size,
                     signal_ids: ids,
                 });
-        
+
                 match client.subscribe_by_id(args).await {
                     Ok(response) => {
                         let mut stream = response.into_inner();
-        
+
                         // Ignore first message as the first notification is not triggered by a provider
                         // but instead contains the current value.
                         let first_current_value = stream
                             .message()
                             .await
                             .map_err(|err| Error::SubscriptionFailed(err.to_string()))?;
-        
+
                         let mut initial_signals_value: HashMap<Signal, DataValue> = HashMap::new();
                         for (id, datapoint) in first_current_value.unwrap().entries {
                             initial_signals_value.insert(
@@ -125,10 +131,10 @@ impl ReceivingEnd {
                                 DataValue::from(&datapoint.value),
                             );
                         }
-        
+
                         let result = initial_values_sender.send(initial_signals_value).await;
                         assert!(result.is_ok());
-        
+
                         tokio::spawn(async move {
                             loop {
                                 if let Some(update) = stream
@@ -158,14 +164,14 @@ impl ReceivingEnd {
                     }
                     Err(err) => Err(Error::SubscriptionFailed(err.to_string())),
                 }
-            },
+            }
             Direction::Write => {
                 for signal in signals {
                     ids_.push(SignalId {
                         signal: Some(kuksa_val_v2::signal_id::Signal::Id(signal.id.unwrap())),
                     });
                 }
-        
+
                 let args = kuksa_val_v2::OpenProviderStreamRequest {
                     action: Some(
                         kuksa_val_v2::open_provider_stream_request::Action::ProvideActuationRequest(
@@ -175,16 +181,16 @@ impl ReceivingEnd {
                         ),
                     ),
                 };
-        
+
                 // Wrap the stream in a tonic::Request
                 let request = tonic::Request::new(tokio_stream::iter(vec![args]));
-        
+
                 // Open the stream on the server
                 tokio::spawn(async move {
                     match client.open_provider_stream(request).await {
                         Ok(response) => {
                             let mut stream = response.into_inner();
-            
+
                             let task = tokio::spawn(async move {
                                 while let Ok(Some(resp)) = stream.message().await {
                                     match resp.action {
@@ -192,18 +198,19 @@ impl ReceivingEnd {
                                         Some(PublishValuesResponse(_)) => {}
                                         Some(BatchActuateStreamRequest(req)) => {
                                             let now = Instant::now();
-                                            for actuate_request in req.actuate_requests{
-                                                if let Some(signal_id) = actuate_request.signal_id{
-                                                    if let Some(signal) = signal_id.signal{
+                                            for actuate_request in req.actuate_requests {
+                                                if let Some(signal_id) = actuate_request.signal_id {
+                                                    if let Some(signal) = signal_id.signal {
                                                         let id_i32 = match signal{
                                                             kuksa_val_v2::signal_id::Signal::Id(id) => id,
                                                             kuksa_val_v2::signal_id::Signal::Path(_) => todo!(),
                                                         };
-                                                        if let Some(sender) = signals_map.get(&id_i32){
+                                                        if let Some(sender) =
+                                                            signals_map.get(&id_i32)
+                                                        {
                                                             let _ = sender.send(now);
                                                         }
                                                     }
-                                                    
                                                 } else {
                                                     error!("No SignalId found");
                                                 }
@@ -216,11 +223,11 @@ impl ReceivingEnd {
                             });
                             task.await.unwrap()
                         }
-                        Err(err) =>  Err(Error::SubscriptionFailed(err.to_string())),
+                        Err(err) => Err(Error::SubscriptionFailed(err.to_string())),
                     }
                 });
                 Ok(())
-            },
+            }
         }
     }
 }

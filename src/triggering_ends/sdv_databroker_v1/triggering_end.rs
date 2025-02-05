@@ -12,7 +12,7 @@
 ********************************************************************************/
 
 use crate::config::Signal;
-use crate::triggering_ends::triggering_end_trait::{Error, TriggeringEndInterface, PublishError};
+use crate::triggering_ends::triggering_end_trait::{Error, PublishError, TriggeringEndInterface};
 use crate::types::DataValue;
 use databroker_proto::sdv::databroker::v1 as proto;
 use tokio_stream::wrappers::ReceiverStream;

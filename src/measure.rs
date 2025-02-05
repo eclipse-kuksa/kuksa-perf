@@ -15,7 +15,7 @@ use crate::triggering_ends::kuksa_val_v1::triggering_end as p_kuksa_val_v1;
 use crate::triggering_ends::kuksa_val_v2::triggering_end as p_kuksa_val_v2;
 use crate::triggering_ends::sdv_databroker_v1::triggering_end as p_sdv_databroker_v1;
 
-use crate::triggering_ends::triggering_end_trait::{TriggeringEndInterface, PublishError};
+use crate::triggering_ends::triggering_end_trait::{PublishError, TriggeringEndInterface};
 
 use crate::receiving_ends::kuksa_val_v1::receiving_end as s_kuksa_val_v1;
 use crate::receiving_ends::kuksa_val_v2::receiving_end as s_kuksa_val_v2;
@@ -23,8 +23,8 @@ use crate::receiving_ends::sdv_databroker_v1::receiving_end as s_sdv_databroker_
 
 use crate::config::{Group, Signal};
 
-use crate::shutdown::ShutdownHandler;
 use crate::receiving_ends::receiving_end_trait::{Error, ReceivingEndInterface};
+use crate::shutdown::ShutdownHandler;
 use crate::types::DataValue;
 use crate::utils::{write_global_output, write_output};
 
@@ -139,9 +139,10 @@ async fn create_receiving_end(
             receiving_end_interface: Box::new(receiving_end),
         })
     } else {
-        let receiving_end = s_kuksa_val_v1::ReceivingEnd::new(channel, signals, initial_values_sender)
-            .await
-            .unwrap();
+        let receiving_end =
+            s_kuksa_val_v1::ReceivingEnd::new(channel, signals, initial_values_sender)
+                .await
+                .unwrap();
         Ok(ReceivingEnd {
             receiving_end_interface: Box::new(receiving_end),
         })
@@ -185,10 +186,14 @@ async fn create_tcp_channel(host: String, port: u64) -> Result<Channel> {
     Ok(channel)
 }
 
-fn create_triggering_end(channel: Channel, api: &Api, direction: &Direction) -> Result<TriggeringEnd> {
+fn create_triggering_end(
+    channel: Channel,
+    api: &Api,
+    direction: &Direction,
+) -> Result<TriggeringEnd> {
     if *api == Api::KuksaValV2 {
-        let triggering_end =
-            p_kuksa_val_v2::TriggeringEnd::new(channel, direction).with_context(|| "Failed to setup triggering_end")?;
+        let triggering_end = p_kuksa_val_v2::TriggeringEnd::new(channel, direction)
+            .with_context(|| "Failed to setup triggering_end")?;
         Ok(TriggeringEnd {
             triggering_end_interface: Box::new(triggering_end),
         })
@@ -199,8 +204,8 @@ fn create_triggering_end(channel: Channel, api: &Api, direction: &Direction) -> 
             triggering_end_interface: Box::new(triggering_end),
         })
     } else {
-        let triggering_end =
-            p_kuksa_val_v1::TriggeringEnd::new(channel).with_context(|| "Failed to setup triggering_end")?;
+        let triggering_end = p_kuksa_val_v1::TriggeringEnd::new(channel)
+            .with_context(|| "Failed to setup triggering_end")?;
         Ok(TriggeringEnd {
             triggering_end_interface: Box::new(triggering_end),
         })
@@ -233,7 +238,11 @@ pub async fn perform_measurement(
         let triggering_end_channel = triggering_end_channel.clone();
 
         // Initialize triggering_end
-        let mut triggering_end = create_triggering_end(triggering_end_channel, &measurement_config.api, &measurement_config.direction)?;
+        let mut triggering_end = create_triggering_end(
+            triggering_end_channel,
+            &measurement_config.api,
+            &measurement_config.direction,
+        )?;
         // Validate metadata signals
         let ve = triggering_end
             .triggering_end_interface
