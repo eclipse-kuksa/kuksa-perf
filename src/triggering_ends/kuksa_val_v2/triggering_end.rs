@@ -12,7 +12,8 @@
 ********************************************************************************/
 
 use crate::config::Signal;
-use crate::providers::provider_trait::{Error, ProviderInterface, PublishError};
+use crate::measure::Direction;
+use crate::triggering_ends::triggering_end_trait::{Error, TriggeringEndInterface, PublishError};
 use crate::types::DataValue;
 
 use databroker_proto::kuksa::val::v2::{
@@ -37,25 +38,30 @@ use tonic::transport::Channel;
 
 use std::collections::HashMap;
 
-pub struct Provider {
+pub struct TriggeringEnd {
     tx: Sender<proto::OpenProviderStreamRequest>,
     metadata: HashMap<String, proto::Metadata>,
     id_to_path: HashMap<i32, String>,
     channel: Channel,
     initial_signals_values: HashMap<Signal, DataValue>,
+    direction: Direction,
 }
 
-impl Provider {
-    pub fn new(channel: Channel) -> Result<Self, Error> {
+impl TriggeringEnd {
+    pub fn new(channel: Channel, direction: &Direction) -> Result<Self, Error> {
         let (tx, rx) = mpsc::channel(10);
-
-        tokio::spawn(Provider::run(rx, channel.clone()));
-        Ok(Provider {
+        
+        match direction{
+            Direction::Read => {tokio::spawn(TriggeringEnd::run(rx, channel.clone()));},
+            Direction::Write => (),
+        }
+        Ok(TriggeringEnd {
             tx,
             metadata: HashMap::new(),
             id_to_path: HashMap::new(),
             channel,
             initial_signals_values: HashMap::new(),
+            direction: direction.clone(),
         })
     }
 
@@ -103,57 +109,89 @@ impl Provider {
 }
 
 #[async_trait]
-impl ProviderInterface for Provider {
+impl TriggeringEndInterface for TriggeringEnd {
     async fn publish(
         &self,
         signal_data: &[Signal],
         iteration: u64,
     ) -> Result<Instant, PublishError> {
-        let datapoints = if iteration == 0 {
-            HashMap::from_iter(signal_data.iter().map(|signal: &Signal| {
-                let metadata = self.metadata.get(&signal.path).unwrap();
-                let mut new_value = n_to_value(metadata.clone(), iteration).unwrap();
-                if let Some(value) = self.initial_signals_values.get(signal) {
-                    if DataValue::from(&Some(new_value.clone())) == *value {
-                        new_value = n_to_value(metadata.clone(), iteration + 1).unwrap();
-                    }
+        match  self.direction{
+            Direction::Read => {
+                let datapoints = if iteration == 0 {
+                    HashMap::from_iter(signal_data.iter().map(|signal: &Signal| {
+                        let metadata = self.metadata.get(&signal.path).unwrap();
+                        let mut new_value = n_to_value(metadata.clone(), iteration).unwrap();
+                        if let Some(value) = self.initial_signals_values.get(signal) {
+                            if DataValue::from(&Some(new_value.clone())) == *value {
+                                new_value = n_to_value(metadata.clone(), iteration + 1).unwrap();
+                            }
+                        }
+                        (
+                            metadata.id,
+                            proto::Datapoint {
+                                timestamp: None,
+                                value: Some(new_value),
+                            },
+                        )
+                    }))
+                } else {
+                    HashMap::from_iter(signal_data.iter().map(|path: &Signal| {
+                        let metadata = self.metadata.get(&path.path).unwrap();
+                        (
+                            metadata.id,
+                            proto::Datapoint {
+                                timestamp: None,
+                                value: Some(n_to_value(metadata.clone(), iteration + 1).unwrap()),
+                            },
+                        )
+                    }))
+                };
+        
+                let payload = proto::OpenProviderStreamRequest {
+                        action: Some(open_provider_stream_request::Action::PublishValuesRequest(
+                            proto::PublishValuesRequest {
+                                request_id: 1_i32,
+                                datapoints,
+                            },
+                        )),
+                    };
+            
+                    let now = Instant::now();
+                    self.tx
+                        .send(payload)
+                        .await
+                        .map_err(|err| PublishError::SendFailure(err.to_string()))?;
+                    Ok(now)
+            },
+            Direction::Write => {
+                let actuate_requests = if iteration == 0 {
+                    Vec::from_iter(signal_data.iter().map(|signal: &Signal| {
+                        let metadata = self.metadata.get(&signal.path).unwrap();
+                        let mut new_value = n_to_value(metadata.clone(), iteration).unwrap();
+                        if let Some(value) = self.initial_signals_values.get(signal) {
+                            if DataValue::from(&Some(new_value.clone())) == *value {
+                                new_value = n_to_value(metadata.clone(), iteration + 1).unwrap();
+                            }
+                        }
+                        proto::ActuateRequest{ signal_id:Some(proto::SignalId { signal: Some(proto::signal_id::Signal::Id(metadata.id)) }), value: Some(new_value) }
+                    }))
+                } else {
+                    Vec::from_iter(signal_data.iter().map(|path: &Signal| {
+                        let metadata = self.metadata.get(&path.path).unwrap();
+                        proto::ActuateRequest{ signal_id:Some(proto::SignalId { signal: Some(proto::signal_id::Signal::Id(metadata.id)) }), value: Some(n_to_value(metadata.clone(), iteration + 1).unwrap()) }
+                    }))
+                };
+        
+                let mut client = proto::val_client::ValClient::new(self.channel.clone());
+                let message = proto::BatchActuateRequest { actuate_requests };
+        
+                let now = Instant::now();
+                match client.batch_actuate(tonic::Request::new(message)).await{
+                    Ok(_) => Ok(now),
+                    Err(err) => Err(PublishError::SendFailure(err.to_string())),
                 }
-                (
-                    metadata.id,
-                    proto::Datapoint {
-                        timestamp: None,
-                        value: Some(new_value),
-                    },
-                )
-            }))
-        } else {
-            HashMap::from_iter(signal_data.iter().map(|path: &Signal| {
-                let metadata = self.metadata.get(&path.path).unwrap();
-                (
-                    metadata.id,
-                    proto::Datapoint {
-                        timestamp: None,
-                        value: Some(n_to_value(metadata.clone(), iteration + 1).unwrap()),
-                    },
-                )
-            }))
-        };
-
-        let payload = proto::OpenProviderStreamRequest {
-            action: Some(open_provider_stream_request::Action::PublishValuesRequest(
-                proto::PublishValuesRequest {
-                    request_id: 1_i32,
-                    datapoints,
-                },
-            )),
-        };
-
-        let now = Instant::now();
-        self.tx
-            .send(payload)
-            .await
-            .map_err(|err| PublishError::SendFailure(err.to_string()))?;
-        Ok(now)
+            }
+        }
     }
 
     async fn validate_signals_metadata(

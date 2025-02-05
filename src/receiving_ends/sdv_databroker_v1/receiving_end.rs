@@ -14,7 +14,7 @@
 use databroker_proto::sdv::databroker::v1 as sdv_databroker_v1;
 use std::{collections::HashMap, sync::Arc};
 
-use crate::subscribers::subscriber_trait::{Error, SubscriberInterface};
+use crate::receiving_ends::receiving_end_trait::{Error, ReceivingEndInterface};
 
 use log::info;
 use tokio::{
@@ -25,11 +25,11 @@ use tonic::{async_trait, transport::Channel};
 
 use crate::config::Signal;
 
-pub struct Subscriber {
+pub struct ReceivingEnd {
     signals: Arc<HashMap<String, Sender<Instant>>>,
 }
 
-impl Subscriber {
+impl ReceivingEnd {
     pub async fn new(channel: Channel, signals: Vec<Signal>) -> Result<Self, Error> {
         let signals_c = Arc::new(HashMap::from_iter(signals.clone().into_iter().map(
             |signal| {
@@ -38,7 +38,7 @@ impl Subscriber {
             },
         )));
 
-        Subscriber::start(channel, signals, signals_c.clone()).await?;
+        ReceivingEnd::start(channel, signals, signals_c.clone()).await?;
 
         Ok(Self { signals: signals_c })
     }
@@ -117,8 +117,8 @@ impl Subscriber {
 }
 
 #[async_trait]
-impl SubscriberInterface for Subscriber {
-    async fn wait_for(&self, signal: &Signal) -> Result<Receiver<Instant>, Error> {
+impl ReceivingEndInterface for ReceivingEnd {
+    async fn get_receiver(&self, signal: &Signal) -> Result<Receiver<Instant>, Error> {
         match self.signals.get(&signal.path) {
             Some(sender) => Ok(sender.subscribe()),
             None => Err(Error::SignalNotFound(signal.path.to_string())),
@@ -132,7 +132,7 @@ mod test {
 
     #[test]
     fn test_query_from_signal() {
-        let query = Subscriber::query_from_signals(
+        let query = ReceivingEnd::query_from_signals(
             vec![Signal {
                 path: "Vehicle.Speed".to_owned(),
                 id: None,
@@ -144,7 +144,7 @@ mod test {
 
     #[test]
     fn test_query_from_signals() {
-        let query = Subscriber::query_from_signals(
+        let query = ReceivingEnd::query_from_signals(
             vec![
                 Signal {
                     path: "Vehicle.Speed".to_owned(),

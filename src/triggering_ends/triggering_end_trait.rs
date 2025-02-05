@@ -22,7 +22,7 @@ use tokio::time::Instant;
 use crate::{config::Signal, types::DataValue};
 
 #[async_trait]
-pub trait ProviderInterface: Send + Sync {
+pub trait TriggeringEndInterface: Send + Sync {
     async fn publish(
         &self,
         signal_data: &[Signal],

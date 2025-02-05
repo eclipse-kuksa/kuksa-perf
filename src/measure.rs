@@ -11,20 +11,20 @@
 * SPDX-License-Identifier: Apache-2.0
 ********************************************************************************/
 
-use crate::providers::kuksa_val_v1::provider as p_kuksa_val_v1;
-use crate::providers::kuksa_val_v2::provider as p_kuksa_val_v2;
-use crate::providers::sdv_databroker_v1::provider as p_sdv_databroker_v1;
+use crate::triggering_ends::kuksa_val_v1::triggering_end as p_kuksa_val_v1;
+use crate::triggering_ends::kuksa_val_v2::triggering_end as p_kuksa_val_v2;
+use crate::triggering_ends::sdv_databroker_v1::triggering_end as p_sdv_databroker_v1;
 
-use crate::providers::provider_trait::{ProviderInterface, PublishError};
+use crate::triggering_ends::triggering_end_trait::{TriggeringEndInterface, PublishError};
 
-use crate::subscribers::kuksa_val_v1::subscriber as s_kuksa_val_v1;
-use crate::subscribers::kuksa_val_v2::subscriber as s_kuksa_val_v2;
-use crate::subscribers::sdv_databroker_v1::subscriber as s_sdv_databroker_v1;
+use crate::receiving_ends::kuksa_val_v1::receiving_end as s_kuksa_val_v1;
+use crate::receiving_ends::kuksa_val_v2::receiving_end as s_kuksa_val_v2;
+use crate::receiving_ends::sdv_databroker_v1::receiving_end as s_sdv_databroker_v1;
 
 use crate::config::{Group, Signal};
 
 use crate::shutdown::ShutdownHandler;
-use crate::subscribers::subscriber_trait::{Error, SubscriberInterface};
+use crate::receiving_ends::receiving_end_trait::{Error, ReceivingEndInterface};
 use crate::types::DataValue;
 use crate::utils::{write_global_output, write_output};
 
@@ -53,12 +53,18 @@ pub enum Api {
     SdvDatabrokerV1,
 }
 
-pub struct Provider {
-    pub provider_interface: Box<dyn ProviderInterface>,
+#[derive(Clone, PartialEq)]
+pub enum Direction {
+    Read,
+    Write,
 }
 
-pub struct Subscriber {
-    pub subscriber_interface: Box<dyn SubscriberInterface>,
+pub struct TriggeringEnd {
+    pub triggering_end_interface: Box<dyn TriggeringEndInterface>,
+}
+
+pub struct ReceivingEnd {
+    pub receiving_end_interface: Box<dyn ReceivingEndInterface>,
 }
 
 #[derive(Clone)]
@@ -70,6 +76,7 @@ pub struct MeasurementConfig {
     pub interval: u16,
     pub skip_seconds: Option<u64>,
     pub api: Api,
+    pub direction: Direction,
     pub detailed_output: bool,
     pub buffer_size: Option<u32>,
 }
@@ -78,9 +85,9 @@ pub struct MeasurementContext {
     pub measurement_config: MeasurementConfig,
     pub group_name: String,
     pub shutdown_handler: ShutdownHandler,
-    pub provider: Provider,
+    pub triggering_end: TriggeringEnd,
     pub signals: Vec<Signal>,
-    pub subscriber: Subscriber,
+    pub receiving_end: ReceivingEnd,
     pub hist: Histogram<u64>,
     pub running_hist: Histogram<u64>,
     pub latency_series: Vec<u64>,
@@ -103,38 +110,40 @@ impl fmt::Display for Api {
     }
 }
 
-async fn create_subscriber(
+async fn create_receiving_end(
     channel: Channel,
     signals: Vec<Signal>,
     api: &Api,
     initial_values_sender: Sender<HashMap<Signal, DataValue>>,
     buffer_size: Option<u32>,
-) -> Result<Subscriber> {
+    direction: &Direction,
+) -> Result<ReceivingEnd> {
     if *api == Api::KuksaValV2 {
-        let subscriber = s_kuksa_val_v2::Subscriber::new(
+        let receiving_end = s_kuksa_val_v2::ReceivingEnd::new(
             channel,
             signals,
             initial_values_sender,
             buffer_size.unwrap_or(1),
+            direction,
         )
         .await
         .unwrap();
-        Ok(Subscriber {
-            subscriber_interface: Box::new(subscriber),
+        Ok(ReceivingEnd {
+            receiving_end_interface: Box::new(receiving_end),
         })
     } else if *api == Api::SdvDatabrokerV1 {
-        let subscriber = s_sdv_databroker_v1::Subscriber::new(channel, signals)
+        let receiving_end = s_sdv_databroker_v1::ReceivingEnd::new(channel, signals)
             .await
             .unwrap();
-        Ok(Subscriber {
-            subscriber_interface: Box::new(subscriber),
+        Ok(ReceivingEnd {
+            receiving_end_interface: Box::new(receiving_end),
         })
     } else {
-        let subscriber = s_kuksa_val_v1::Subscriber::new(channel, signals, initial_values_sender)
+        let receiving_end = s_kuksa_val_v1::ReceivingEnd::new(channel, signals, initial_values_sender)
             .await
             .unwrap();
-        Ok(Subscriber {
-            subscriber_interface: Box::new(subscriber),
+        Ok(ReceivingEnd {
+            receiving_end_interface: Box::new(receiving_end),
         })
     }
 }
@@ -176,24 +185,24 @@ async fn create_tcp_channel(host: String, port: u64) -> Result<Channel> {
     Ok(channel)
 }
 
-fn create_provider(channel: Channel, api: &Api) -> Result<Provider> {
+fn create_triggering_end(channel: Channel, api: &Api, direction: &Direction) -> Result<TriggeringEnd> {
     if *api == Api::KuksaValV2 {
-        let provider =
-            p_kuksa_val_v2::Provider::new(channel).with_context(|| "Failed to setup provider")?;
-        Ok(Provider {
-            provider_interface: Box::new(provider),
+        let triggering_end =
+            p_kuksa_val_v2::TriggeringEnd::new(channel, direction).with_context(|| "Failed to setup triggering_end")?;
+        Ok(TriggeringEnd {
+            triggering_end_interface: Box::new(triggering_end),
         })
     } else if *api == Api::SdvDatabrokerV1 {
-        let provider = p_sdv_databroker_v1::Provider::new(channel)
-            .with_context(|| "Failed to setup provider")?;
-        Ok(Provider {
-            provider_interface: Box::new(provider),
+        let triggering_end = p_sdv_databroker_v1::TriggeringEnd::new(channel)
+            .with_context(|| "Failed to setup triggering_end")?;
+        Ok(TriggeringEnd {
+            triggering_end_interface: Box::new(triggering_end),
         })
     } else {
-        let provider =
-            p_kuksa_val_v1::Provider::new(channel).with_context(|| "Failed to setup provider")?;
-        Ok(Provider {
-            provider_interface: Box::new(provider),
+        let triggering_end =
+            p_kuksa_val_v1::TriggeringEnd::new(channel).with_context(|| "Failed to setup triggering_end")?;
+        Ok(TriggeringEnd {
+            triggering_end_interface: Box::new(triggering_end),
         })
     }
 }
@@ -203,14 +212,14 @@ pub async fn perform_measurement(
     config_groups: Vec<Group>,
     shutdown_handler: ShutdownHandler,
 ) -> Result<()> {
-    let provider_channel = match measurement_config.unix_socket_path {
+    let triggering_end_channel = match measurement_config.unix_socket_path {
         Some(ref path) => create_unix_socket_channel(path).await?,
         None => {
             create_tcp_channel(measurement_config.host.clone(), measurement_config.port).await?
         }
     };
 
-    let subscriber_channel = match measurement_config.unix_socket_path {
+    let receiving_end_channel = match measurement_config.unix_socket_path {
         Some(ref path) => create_unix_socket_channel(path).await?,
         None => {
             create_tcp_channel(measurement_config.host.clone(), measurement_config.port).await?
@@ -221,13 +230,13 @@ pub async fn perform_measurement(
     let mut tasks: JoinSet<Result<MeasurementResult>> = JoinSet::new();
 
     for group in config_groups.clone() {
-        let provider_channel = provider_channel.clone();
-        // Initialize provider
-        let mut provider = create_provider(provider_channel, &measurement_config.api)?;
+        let triggering_end_channel = triggering_end_channel.clone();
 
+        // Initialize triggering_end
+        let mut triggering_end = create_triggering_end(triggering_end_channel, &measurement_config.api, &measurement_config.direction)?;
         // Validate metadata signals
-        let ve = provider
-            .provider_interface
+        let ve = triggering_end
+            .triggering_end_interface
             .as_mut()
             .validate_signals_metadata(group.signals.as_slice())
             .await;
@@ -237,24 +246,25 @@ pub async fn perform_measurement(
             Ok(vec) => signals = vec,
             Err(e) => println!("Error: {}", e),
         }
-        // Initilize subscriber and initialize initial signal values.
+        // Initilize receiving_end and initialize initial signal values.
         let (initial_values_sender, mut initial_values_reciever) =
             tokio::sync::mpsc::channel::<HashMap<Signal, DataValue>>(10);
 
-        let subscriber_channel = subscriber_channel.clone();
-        let subscriber = create_subscriber(
-            subscriber_channel,
+        let receiving_end_channel = receiving_end_channel.clone();
+        let receiving_end = create_receiving_end(
+            receiving_end_channel,
             signals.clone(),
             &measurement_config.api,
             initial_values_sender,
             measurement_config.buffer_size,
+            &measurement_config.direction,
         )
         .await?;
 
         // Receive the initial signal values
         if let Some(initial_signal_values) = initial_values_reciever.recv().await {
-            let result = provider
-                .provider_interface
+            let result = triggering_end
+                .triggering_end_interface
                 .as_mut()
                 .set_initial_signals_values(initial_signal_values)
                 .await;
@@ -275,9 +285,9 @@ pub async fn perform_measurement(
             measurement_config,
             group_name: group_name.clone(),
             shutdown_handler: shutdown_handler.clone(),
-            provider,
+            triggering_end,
             signals,
-            subscriber,
+            receiving_end,
             hist,
             running_hist,
             latency_series: Vec::new(),
@@ -419,18 +429,18 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
             }
         }
 
-        let provider = ctx.provider.provider_interface.as_ref();
-        let publish_task = provider.publish(&ctx.signals, iterations);
+        let triggering_end = ctx.triggering_end.triggering_end_interface.as_ref();
+        let publish_task = triggering_end.publish(&ctx.signals, iterations);
 
-        let mut subscriber_tasks: JoinSet<Result<Instant, Error>> = JoinSet::new();
+        let mut meassure_tasks: JoinSet<Result<Instant, Error>> = JoinSet::new();
 
         for signal in &ctx.signals {
             // TODO: return an awaitable thingie (wrapping the Receiver<Instant>)
-            let subscriber = ctx.subscriber.subscriber_interface.as_ref();
-            let mut receiver = subscriber.wait_for(signal).await.unwrap();
+            let receiving_end = ctx.receiving_end.receiving_end_interface.as_ref();
+            let mut receiver = receiving_end.get_receiver(signal).await.unwrap();
             let mut shutdown_triggered = ctx.shutdown_handler.trigger.subscribe();
 
-            subscriber_tasks.spawn(async move {
+            meassure_tasks.spawn(async move {
                 // Wait for notification or shutdown
                 select! {
                     instant = receiver.recv() => {
@@ -453,7 +463,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
             }
         }?;
 
-        while let Some(received) = subscriber_tasks.join_next().await {
+        while let Some(received) = meassure_tasks.join_next().await {
             match received {
                 Ok(Ok(received)) => {
                     if start_run.elapsed().as_millis() < skip_milliseconds.into() {

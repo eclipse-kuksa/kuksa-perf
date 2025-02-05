@@ -12,4 +12,4 @@
 ********************************************************************************/
 
 mod conversions;
-pub mod provider;
+pub mod triggering_end;

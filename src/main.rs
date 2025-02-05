@@ -14,7 +14,7 @@
 use anyhow::Result;
 use clap::Parser;
 use config::Group;
-use measure::{perform_measurement, Api, MeasurementConfig};
+use measure::{perform_measurement, Api, Direction, MeasurementConfig};
 use shutdown::setup_shutdown_handler;
 use std::collections::HashSet;
 
@@ -22,9 +22,9 @@ use utils::read_config;
 
 mod config;
 mod measure;
-mod providers;
+mod triggering_ends;
 mod shutdown;
-mod subscribers;
+mod receiving_ends;
 mod types;
 mod utils;
 
@@ -38,6 +38,10 @@ struct Args {
     /// Api of databroker.
     #[clap(long, display_order = 2, default_value = "kuksa.val.v1", value_parser = clap::builder::PossibleValuesParser::new(["kuksa.val.v1", "kuksa.val.v2", "sdv.databroker.v1"]))]
     api: String,
+
+    /// Api of databroker.
+    #[clap(long, display_order = 2, default_value = "read", value_parser = clap::builder::PossibleValuesParser::new(["read", "write"]))]
+    direction: String,
 
     /// Host address of databroker.
     #[clap(long, display_order = 3, default_value = "http://127.0.0.1")]
@@ -128,6 +132,23 @@ async fn main() -> Result<()> {
         }
     }
 
+    let direction = if args.direction.contains("read") {
+        Direction::Read
+    } else {
+        if args.api.contains("sdv.databroker.v1") {
+            eprintln!(
+                "Error: sdv.databroker.v1 is not supported for meassuring the write direction."
+            );
+            std::process::exit(1);
+        } else if args.api.contains("kuksa.val.v2") {
+            Api::KuksaValV2
+        } else {
+            eprintln!("Error: kuksa.val.v1 is not supported for meassuring the write direction.");
+            std::process::exit(1);
+        };
+        Direction::Write
+    };
+
     let api = if args.api.contains("sdv.databroker.v1") {
         Api::SdvDatabrokerV1
     } else if args.api.contains("kuksa.val.v2") {
@@ -154,6 +175,7 @@ async fn main() -> Result<()> {
         interval: 0,
         skip_seconds: args.skip_seconds,
         api,
+        direction,
         detailed_output: args.detailed_output,
         buffer_size: args.buffer_size,
     };

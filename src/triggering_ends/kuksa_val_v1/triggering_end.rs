@@ -12,7 +12,7 @@
 ********************************************************************************/
 
 use crate::config::Signal;
-use crate::providers::provider_trait::{Error, ProviderInterface, PublishError};
+use crate::triggering_ends::triggering_end_trait::{Error, TriggeringEndInterface, PublishError};
 use crate::types::DataValue;
 use databroker_proto::kuksa::val::v1 as proto;
 
@@ -31,19 +31,19 @@ use tonic::transport::Channel;
 
 use std::collections::HashMap;
 
-pub struct Provider {
+pub struct TriggeringEnd {
     tx: Sender<proto::StreamedUpdateRequest>,
     metadata: HashMap<String, proto::Metadata>,
     channel: Channel,
     initial_signals_values: HashMap<Signal, DataValue>,
 }
 
-impl Provider {
+impl TriggeringEnd {
     pub fn new(channel: Channel) -> Result<Self, Error> {
         let (tx, rx) = mpsc::channel(10);
 
-        tokio::spawn(Provider::run(rx, channel.clone()));
-        Ok(Provider {
+        tokio::spawn(TriggeringEnd::run(rx, channel.clone()));
+        Ok(TriggeringEnd {
             tx,
             metadata: HashMap::new(),
             channel,
@@ -87,7 +87,7 @@ impl Provider {
 }
 
 #[async_trait]
-impl ProviderInterface for Provider {
+impl TriggeringEndInterface for TriggeringEnd {
     async fn publish(
         &self,
         signal_data: &[Signal],
