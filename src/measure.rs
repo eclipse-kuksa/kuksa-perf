@@ -254,7 +254,7 @@ pub async fn perform_measurement(
             Ok(vec) => vec,
             Err(e) => panic!("Error: {}", e),
         };
-        // Initilize receiving_end and initialize initial signal values.
+        // Initialize receiving_end and initialize initial signal values.
         let (initial_values_sender, mut initial_values_reciever) =
             tokio::sync::mpsc::channel::<HashMap<Signal, DataValue>>(10);
 

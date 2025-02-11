@@ -203,7 +203,9 @@ impl ReceivingEnd {
                                                     if let Some(signal) = signal_id.signal {
                                                         let id_i32 = match signal{
                                                             kuksa_val_v2::signal_id::Signal::Id(id) => id,
-                                                            kuksa_val_v2::signal_id::Signal::Path(_) => todo!(),
+                                                            kuksa_val_v2::signal_id::Signal::Path(_) => {
+                                                                return Err(Error::RecvFailed(format!("This should not happen since databroker-perf is configured to use ids!")))
+                                                            },
                                                         };
                                                         if let Some(sender) =
                                                             signals_map.get(&id_i32)
