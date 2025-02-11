@@ -13,7 +13,7 @@
 
 use crate::config::Signal;
 use crate::measure::Direction;
-use crate::triggering_ends::triggering_end_trait::{Error, PublishError, TriggeringEndInterface};
+use crate::triggering_ends::triggering_end_trait::{Error, TriggerError, TriggeringEndInterface};
 use crate::types::DataValue;
 
 use databroker_proto::kuksa::val::v2::{
@@ -87,8 +87,8 @@ impl TriggeringEnd {
                                             "Singal id: {} | error setting datapoint {}",
                                             id, value.message
                                         );
-                                        return Err::<(), Error>(Error::PublishError(
-                                            PublishError::SendFailure(value.message.clone()),
+                                        return Err::<(), Error>(Error::TriggerError(
+                                            TriggerError::SendFailure(value.message.clone()),
                                         ));
                                     }
                                 }
@@ -112,11 +112,11 @@ impl TriggeringEnd {
 
 #[async_trait]
 impl TriggeringEndInterface for TriggeringEnd {
-    async fn publish(
+    async fn trigger(
         &self,
         signal_data: &[Signal],
         iteration: u64,
-    ) -> Result<Instant, PublishError> {
+    ) -> Result<Instant, TriggerError> {
         match self.direction {
             Direction::Read => {
                 let datapoints = if iteration == 0 {
@@ -162,7 +162,7 @@ impl TriggeringEndInterface for TriggeringEnd {
                 self.tx
                     .send(payload)
                     .await
-                    .map_err(|err| PublishError::SendFailure(err.to_string()))?;
+                    .map_err(|err| TriggerError::SendFailure(err.to_string()))?;
                 Ok(now)
             }
             Direction::Write => {
@@ -200,7 +200,7 @@ impl TriggeringEndInterface for TriggeringEnd {
                 let now = Instant::now();
                 match client.batch_actuate(tonic::Request::new(message)).await {
                     Ok(_) => Ok(now),
-                    Err(err) => Err(PublishError::SendFailure(err.to_string())),
+                    Err(err) => Err(TriggerError::SendFailure(err.to_string())),
                 }
             }
         }
@@ -209,6 +209,7 @@ impl TriggeringEndInterface for TriggeringEnd {
     async fn validate_signals_metadata(
         &mut self,
         signals: &[Signal],
+        direction: &Direction,
     ) -> Result<Vec<Signal>, Error> {
         let signals: Vec<String> = signals.iter().map(|signal| signal.path.clone()).collect();
         let number_of_signals = signals.len();
@@ -234,6 +235,11 @@ impl TriggeringEndInterface for TriggeringEnd {
             match response {
                 Ok(entries) => {
                     for metadata in entries.into_inner().metadata.iter() {
+                        if metadata.entry_type == proto::EntryType::Sensor as i32 && *direction == Direction::Write {
+                            return Err(Error::TriggerError(TriggerError::NoActuator(
+                                signal_path.clone()
+                            )));
+                        }
                         self.metadata.insert(signal_path.clone(), metadata.clone());
                         self.id_to_path.insert(metadata.id, signal_path.clone());
                         signals_response.push(Signal {
@@ -277,7 +283,7 @@ impl TriggeringEndInterface for TriggeringEnd {
     }
 }
 
-pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, PublishError> {
+pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, TriggerError> {
     match proto::DataType::try_from(metadata.data_type) {
         Ok(proto::DataType::String) => {
             if metadata.allowed_values.is_some() {
@@ -289,7 +295,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::String(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -297,7 +303,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                 })
             }
         }
-        Ok(proto::DataType::Unspecified) => Err(PublishError::Shutdown),
+        Ok(proto::DataType::Unspecified) => Err(TriggerError::Shutdown),
         Ok(proto::DataType::Boolean) => match n % 2 {
             0 => Ok(proto::Value {
                 typed_value: Some(proto::value::TypedValue::Bool(true)),
@@ -349,7 +355,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Int32(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -400,7 +406,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Int32(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -451,7 +457,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Int32(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -502,7 +508,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Int64(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -553,7 +559,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Uint32(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -604,7 +610,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Uint32(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -655,7 +661,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Uint32(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -706,7 +712,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Uint64(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -757,7 +763,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Float(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -808,7 +814,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Double(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -830,7 +836,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         )),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -854,7 +860,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         )),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -864,19 +870,19 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                 })
             }
         }
-        Ok(proto::DataType::BooleanArray) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::Int8Array) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::Int16Array) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::Int32Array) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::Int64Array) => Err(PublishError::DataTypeError),
+        Ok(proto::DataType::BooleanArray) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::Int8Array) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::Int16Array) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::Int32Array) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::Int64Array) => Err(TriggerError::DataTypeError),
         //Ok(proto::DataType::Uint8Array) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::Uint16Array) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::Uint32Array) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::Uint64Array) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::FloatArray) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::DoubleArray) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::Timestamp) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::TimestampArray) => Err(PublishError::DataTypeError),
-        Err(_) => Err(PublishError::MetadataError),
+        Ok(proto::DataType::Uint16Array) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::Uint32Array) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::Uint64Array) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::FloatArray) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::DoubleArray) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::Timestamp) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::TimestampArray) => Err(TriggerError::DataTypeError),
+        Err(_) => Err(TriggerError::MetadataError),
     }
 }

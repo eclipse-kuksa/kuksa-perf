@@ -15,7 +15,7 @@ use crate::triggering_ends::kuksa_val_v1::triggering_end as p_kuksa_val_v1;
 use crate::triggering_ends::kuksa_val_v2::triggering_end as p_kuksa_val_v2;
 use crate::triggering_ends::sdv_databroker_v1::triggering_end as p_sdv_databroker_v1;
 
-use crate::triggering_ends::triggering_end_trait::{PublishError, TriggeringEndInterface};
+use crate::triggering_ends::triggering_end_trait::{TriggerError, TriggeringEndInterface};
 
 use crate::receiving_ends::kuksa_val_v1::receiving_end as s_kuksa_val_v1;
 use crate::receiving_ends::kuksa_val_v2::receiving_end as s_kuksa_val_v2;
@@ -247,14 +247,13 @@ pub async fn perform_measurement(
         let ve = triggering_end
             .triggering_end_interface
             .as_mut()
-            .validate_signals_metadata(group.signals.as_slice())
+            .validate_signals_metadata(group.signals.as_slice(), &measurement_config.direction)
             .await;
 
-        let mut signals = Vec::new();
-        match ve {
-            Ok(vec) => signals = vec,
-            Err(e) => println!("Error: {}", e),
-        }
+        let signals = match ve {
+            Ok(vec) => vec,
+            Err(e) => panic!("Error: {}", e),
+        };
         // Initilize receiving_end and initialize initial signal values.
         let (initial_values_sender, mut initial_values_reciever) =
             tokio::sync::mpsc::channel::<HashMap<Signal, DataValue>>(10);
@@ -439,7 +438,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
         }
 
         let triggering_end = ctx.triggering_end.triggering_end_interface.as_ref();
-        let publish_task = triggering_end.publish(&ctx.signals, iterations);
+        let publish_task = triggering_end.trigger(&ctx.signals, iterations);
 
         let mut meassure_tasks: JoinSet<Result<Instant, Error>> = JoinSet::new();
 
@@ -467,7 +466,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
             select! {
                 published = publish_task => published,
                 _ = shutdown_triggered.recv() => {
-                    Err(PublishError::Shutdown)
+                    Err(TriggerError::Shutdown)
                 }
             }
         }?;

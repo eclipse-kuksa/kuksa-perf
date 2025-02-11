@@ -12,7 +12,8 @@
 ********************************************************************************/
 
 use crate::config::Signal;
-use crate::triggering_ends::triggering_end_trait::{Error, PublishError, TriggeringEndInterface};
+use crate::measure::Direction;
+use crate::triggering_ends::triggering_end_trait::{Error, TriggerError, TriggeringEndInterface};
 use crate::types::DataValue;
 use databroker_proto::sdv::databroker::v1 as proto;
 use tokio_stream::wrappers::ReceiverStream;
@@ -92,11 +93,11 @@ impl TriggeringEnd {
 
 #[async_trait]
 impl TriggeringEndInterface for TriggeringEnd {
-    async fn publish(
+    async fn trigger(
         &self,
         signal_data: &[Signal],
         iteration: u64,
-    ) -> Result<Instant, PublishError> {
+    ) -> Result<Instant, TriggerError> {
         let datapoints = HashMap::from_iter(signal_data.iter().map(|path: &Signal| {
             let metadata = self.metadata.get(&path.path).unwrap();
             (
@@ -114,13 +115,14 @@ impl TriggeringEndInterface for TriggeringEnd {
         self.tx
             .send(payload)
             .await
-            .map_err(|err| PublishError::SendFailure(err.to_string()))?;
+            .map_err(|err| TriggerError::SendFailure(err.to_string()))?;
         Ok(now)
     }
 
     async fn validate_signals_metadata(
         &mut self,
         signals: &[Signal],
+        _direction: &Direction,
     ) -> Result<Vec<Signal>, Error> {
         let signals: Vec<String> = signals.iter().map(|signal| signal.path.clone()).collect();
         let number_of_signals = signals.len();
@@ -181,7 +183,7 @@ impl TriggeringEndInterface for TriggeringEnd {
 pub fn n_to_value(
     metadata: proto::Metadata,
     n: u64,
-) -> Result<proto::datapoint::Value, PublishError> {
+) -> Result<proto::datapoint::Value, TriggerError> {
     match proto::DataType::try_from(metadata.data_type) {
         Ok(proto::DataType::String) => {
             if metadata.allowed.is_some() {
@@ -191,7 +193,7 @@ pub fn n_to_value(
                         let value = values.values[index as usize].clone();
                         return Ok(proto::datapoint::Value::StringValue(value));
                     }
-                    _ => return Err(PublishError::MetadataError),
+                    _ => return Err(TriggerError::MetadataError),
                 }
             }
             Ok(proto::datapoint::Value::StringValue(n.to_string()))
@@ -243,7 +245,7 @@ pub fn n_to_value(
                     let value = values.values[index as usize];
                     Ok(proto::datapoint::Value::Int32Value(value))
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::datapoint::Value::Int32Value((n % 128) as i32))
@@ -619,7 +621,7 @@ pub fn n_to_value(
                             values: vec![value],
                         }));
                     }
-                    _ => return Err(PublishError::MetadataError),
+                    _ => return Err(TriggerError::MetadataError),
                 }
             }
             Ok(proto::datapoint::Value::StringArray(proto::StringArray {
@@ -636,7 +638,7 @@ pub fn n_to_value(
                             values: vec![value],
                         }));
                     }
-                    _ => return Err(PublishError::MetadataError),
+                    _ => return Err(TriggerError::MetadataError),
                 }
             }
             Ok(proto::datapoint::Value::Uint32Array(proto::Uint32Array {
@@ -645,7 +647,7 @@ pub fn n_to_value(
         }
         Ok(_) => {
             println!("metadata: {}", metadata.name);
-            Err(PublishError::DataTypeError)
+            Err(TriggerError::DataTypeError)
         }
         // Ok(proto::DataType::StringArray) => Err(PublishError::DataTypeError),
         // Ok(proto::DataType::BoolArray) => Err(PublishError::DataTypeError),
@@ -659,6 +661,6 @@ pub fn n_to_value(
         // Ok(proto::DataType::Uint64Array) => Err(PublishError::DataTypeError),
         // Ok(proto::DataType::FloatArray) => Err(PublishError::DataTypeError),
         // Ok(proto::DataType::DoubleArray) => Err(PublishError::DataTypeError),
-        Err(_) => Err(PublishError::MetadataError),
+        Err(_) => Err(TriggerError::MetadataError),
     }
 }
