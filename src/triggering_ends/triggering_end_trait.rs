@@ -28,8 +28,11 @@ pub trait TriggeringEndInterface: Send + Sync {
         signal_data: &[Signal],
         iteration: u64,
     ) -> Result<Instant, TriggerError>;
-    async fn validate_signals_metadata(&mut self, signals: &[Signal], direction: &Direction)
-        -> Result<Vec<Signal>, Error>;
+    async fn validate_signals_metadata(
+        &mut self,
+        signals: &[Signal],
+        direction: &Direction,
+    ) -> Result<Vec<Signal>, Error>;
     async fn set_initial_signals_values(
         &mut self,
         initial_signals_values: HashMap<Signal, DataValue>,

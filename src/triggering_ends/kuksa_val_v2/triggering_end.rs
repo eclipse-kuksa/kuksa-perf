@@ -235,9 +235,11 @@ impl TriggeringEndInterface for TriggeringEnd {
             match response {
                 Ok(entries) => {
                     for metadata in entries.into_inner().metadata.iter() {
-                        if metadata.entry_type == proto::EntryType::Sensor as i32 && *direction == Direction::Write {
+                        if metadata.entry_type == proto::EntryType::Sensor as i32
+                            && *direction == Direction::Write
+                        {
                             return Err(Error::TriggerError(TriggerError::NoActuator(
-                                signal_path.clone()
+                                signal_path.clone(),
                             )));
                         }
                         self.metadata.insert(signal_path.clone(), metadata.clone());
