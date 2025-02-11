@@ -137,13 +137,13 @@ async fn main() -> Result<()> {
     } else {
         if args.api.contains("sdv.databroker.v1") {
             eprintln!(
-                "Error: sdv.databroker.v1 is not supported for meassuring the write direction."
+                "Error: sdv.databroker.v1 is not supported for measuring the write direction."
             );
             std::process::exit(1);
         } else if args.api.contains("kuksa.val.v2") {
             Api::KuksaValV2
         } else {
-            eprintln!("Error: kuksa.val.v1 is not supported for meassuring the write direction.");
+            eprintln!("Error: kuksa.val.v1 is not supported for measuring the write direction.");
             std::process::exit(1);
         };
         Direction::Write

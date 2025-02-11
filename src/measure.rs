@@ -440,7 +440,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
         let triggering_end = ctx.triggering_end.triggering_end_interface.as_ref();
         let publish_task = triggering_end.trigger(&ctx.signals, iterations);
 
-        let mut meassure_tasks: JoinSet<Result<Instant, Error>> = JoinSet::new();
+        let mut measure_tasks: JoinSet<Result<Instant, Error>> = JoinSet::new();
 
         for signal in &ctx.signals {
             // TODO: return an awaitable thingie (wrapping the Receiver<Instant>)
@@ -448,7 +448,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
             let mut receiver = receiving_end.get_receiver(signal).await.unwrap();
             let mut shutdown_triggered = ctx.shutdown_handler.trigger.subscribe();
 
-            meassure_tasks.spawn(async move {
+            measure_tasks.spawn(async move {
                 // Wait for notification or shutdown
                 select! {
                     instant = receiver.recv() => {
@@ -471,7 +471,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
             }
         }?;
 
-        while let Some(received) = meassure_tasks.join_next().await {
+        while let Some(received) = measure_tasks.join_next().await {
             match received {
                 Ok(Ok(received)) => {
                     if start_run.elapsed().as_millis() < skip_milliseconds.into() {

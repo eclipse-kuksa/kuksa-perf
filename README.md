@@ -1,6 +1,6 @@
 # Eclipse Kuksa databroker-perf
 
-Performance measurement app for KUKSA databroker. It meassures end-to-end latencies between triggering ends (e.g. provided signals or actuation requests) and receiving ends (e.g. subscribing signals or picking up actuation requests).
+Performance measurement app for KUKSA databroker. It measures end-to-end latencies between triggering ends (e.g. provided signals or actuation requests) and receiving ends (e.g. subscribing signals or picking up actuation requests).
 
 ```
 [00:00:05] [================================================================================================================]       5/5       seconds
