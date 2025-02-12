@@ -14,7 +14,7 @@
 use anyhow::Result;
 use clap::Parser;
 use config::Group;
-use measure::{perform_measurement, Api, Operation, MeasurementConfig};
+use measure::{perform_measurement, Api, MeasurementConfig, Operation};
 use shutdown::setup_shutdown_handler;
 use std::collections::HashSet;
 
@@ -136,9 +136,7 @@ async fn main() -> Result<()> {
         Operation::StreamingPublish
     } else {
         if args.api.contains("sdv.databroker.v1") {
-            eprintln!(
-                "Error: sdv.databroker.v1 is not supported for measuring actuate operation."
-            );
+            eprintln!("Error: sdv.databroker.v1 is not supported for measuring actuate operation.");
             std::process::exit(1);
         } else if args.api.contains("kuksa.val.v2") {
             Api::KuksaValV2
