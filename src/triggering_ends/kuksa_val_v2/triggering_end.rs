@@ -12,7 +12,7 @@
 ********************************************************************************/
 
 use crate::config::Signal;
-use crate::measure::Direction;
+use crate::measure::Operation;
 use crate::triggering_ends::triggering_end_trait::{Error, TriggerError, TriggeringEndInterface};
 use crate::types::DataValue;
 
@@ -44,18 +44,18 @@ pub struct TriggeringEnd {
     id_to_path: HashMap<i32, String>,
     channel: Channel,
     initial_signals_values: HashMap<Signal, DataValue>,
-    direction: Direction,
+    operation: Operation,
 }
 
 impl TriggeringEnd {
-    pub fn new(channel: Channel, direction: &Direction) -> Result<Self, Error> {
+    pub fn new(channel: Channel, operation: &Operation) -> Result<Self, Error> {
         let (tx, rx) = mpsc::channel(10);
 
-        match direction {
-            Direction::Read => {
+        match operation {
+            Operation::StreamingPublish => {
                 tokio::spawn(TriggeringEnd::run(rx, channel.clone()));
             }
-            Direction::Write => (),
+            Operation::Actuate => (),
         }
         Ok(TriggeringEnd {
             tx,
@@ -63,7 +63,7 @@ impl TriggeringEnd {
             id_to_path: HashMap::new(),
             channel,
             initial_signals_values: HashMap::new(),
-            direction: direction.clone(),
+            operation: operation.clone(),
         })
     }
 
@@ -117,8 +117,8 @@ impl TriggeringEndInterface for TriggeringEnd {
         signal_data: &[Signal],
         iteration: u64,
     ) -> Result<Instant, TriggerError> {
-        match self.direction {
-            Direction::Read => {
+        match self.operation {
+            Operation::StreamingPublish => {
                 let datapoints = if iteration == 0 {
                     HashMap::from_iter(signal_data.iter().map(|signal: &Signal| {
                         let metadata = self.metadata.get(&signal.path).unwrap();
@@ -165,7 +165,7 @@ impl TriggeringEndInterface for TriggeringEnd {
                     .map_err(|err| TriggerError::SendFailure(err.to_string()))?;
                 Ok(now)
             }
-            Direction::Write => {
+            Operation::Actuate => {
                 let actuate_requests = if iteration == 0 {
                     Vec::from_iter(signal_data.iter().map(|signal: &Signal| {
                         let metadata = self.metadata.get(&signal.path).unwrap();
@@ -209,7 +209,7 @@ impl TriggeringEndInterface for TriggeringEnd {
     async fn validate_signals_metadata(
         &mut self,
         signals: &[Signal],
-        direction: &Direction,
+        operation: &Operation,
     ) -> Result<Vec<Signal>, Error> {
         let signals: Vec<String> = signals.iter().map(|signal| signal.path.clone()).collect();
         let number_of_signals = signals.len();
@@ -236,7 +236,7 @@ impl TriggeringEndInterface for TriggeringEnd {
                 Ok(entries) => {
                     for metadata in entries.into_inner().metadata.iter() {
                         if metadata.entry_type == proto::EntryType::Sensor as i32
-                            && *direction == Direction::Write
+                            && *operation == Operation::Actuate
                         {
                             return Err(Error::TriggerError(TriggerError::NoActuator(
                                 signal_path.clone(),

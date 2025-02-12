@@ -19,7 +19,7 @@ use tonic::async_trait;
 use thiserror::Error;
 use tokio::time::Instant;
 
-use crate::{config::Signal, measure::Direction, types::DataValue};
+use crate::{config::Signal, measure::Operation, types::DataValue};
 
 #[async_trait]
 pub trait TriggeringEndInterface: Send + Sync {
@@ -31,7 +31,7 @@ pub trait TriggeringEndInterface: Send + Sync {
     async fn validate_signals_metadata(
         &mut self,
         signals: &[Signal],
-        direction: &Direction,
+        operation: &Operation,
     ) -> Result<Vec<Signal>, Error>;
     async fn set_initial_signals_values(
         &mut self,

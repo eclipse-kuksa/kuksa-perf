@@ -54,9 +54,9 @@ pub enum Api {
 }
 
 #[derive(Clone, PartialEq)]
-pub enum Direction {
-    Read,
-    Write,
+pub enum Operation {
+    StreamingPublish,
+    Actuate,
 }
 
 pub struct TriggeringEnd {
@@ -76,7 +76,7 @@ pub struct MeasurementConfig {
     pub interval: u16,
     pub skip_seconds: Option<u64>,
     pub api: Api,
-    pub direction: Direction,
+    pub operation: Operation,
     pub detailed_output: bool,
     pub buffer_size: Option<u32>,
 }
@@ -116,7 +116,7 @@ async fn create_receiving_end(
     api: &Api,
     initial_values_sender: Sender<HashMap<Signal, DataValue>>,
     buffer_size: Option<u32>,
-    direction: &Direction,
+    operation: &Operation,
 ) -> Result<ReceivingEnd> {
     if *api == Api::KuksaValV2 {
         let receiving_end = s_kuksa_val_v2::ReceivingEnd::new(
@@ -124,7 +124,7 @@ async fn create_receiving_end(
             signals,
             initial_values_sender,
             buffer_size.unwrap_or(1),
-            direction,
+            operation,
         )
         .await
         .unwrap();
@@ -189,10 +189,10 @@ async fn create_tcp_channel(host: String, port: u64) -> Result<Channel> {
 fn create_triggering_end(
     channel: Channel,
     api: &Api,
-    direction: &Direction,
+    operation: &Operation,
 ) -> Result<TriggeringEnd> {
     if *api == Api::KuksaValV2 {
-        let triggering_end = p_kuksa_val_v2::TriggeringEnd::new(channel, direction)
+        let triggering_end = p_kuksa_val_v2::TriggeringEnd::new(channel, operation)
             .with_context(|| "Failed to setup triggering_end")?;
         Ok(TriggeringEnd {
             triggering_end_interface: Box::new(triggering_end),
@@ -241,13 +241,13 @@ pub async fn perform_measurement(
         let mut triggering_end = create_triggering_end(
             triggering_end_channel,
             &measurement_config.api,
-            &measurement_config.direction,
+            &measurement_config.operation,
         )?;
         // Validate metadata signals
         let ve = triggering_end
             .triggering_end_interface
             .as_mut()
-            .validate_signals_metadata(group.signals.as_slice(), &measurement_config.direction)
+            .validate_signals_metadata(group.signals.as_slice(), &measurement_config.operation)
             .await;
 
         let signals = match ve {
@@ -265,7 +265,7 @@ pub async fn perform_measurement(
             &measurement_config.api,
             initial_values_sender,
             measurement_config.buffer_size,
-            &measurement_config.direction,
+            &measurement_config.operation,
         )
         .await?;
 

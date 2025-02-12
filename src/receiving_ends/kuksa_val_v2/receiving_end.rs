@@ -29,7 +29,7 @@ use tonic::{async_trait, transport::Channel};
 
 use crate::{
     config::Signal,
-    measure::Direction,
+    measure::Operation,
     receiving_ends::receiving_end_trait::{Error, ReceivingEndInterface},
 };
 
@@ -45,7 +45,7 @@ impl ReceivingEnd {
         signals: Vec<Signal>,
         initial_values_sender: tokio::sync::mpsc::Sender<HashMap<Signal, DataValue>>,
         buffer_size: u32,
-        direction: &Direction,
+        operation: &Operation,
     ) -> Result<Self, Error> {
         let signals_c = Arc::new(HashMap::from_iter(signals.clone().into_iter().map(
             |signal| {
@@ -60,7 +60,7 @@ impl ReceivingEnd {
             signals_c.clone(),
             initial_values_sender,
             buffer_size,
-            direction,
+            operation,
         )
         .await?;
 
@@ -73,7 +73,7 @@ impl ReceivingEnd {
         signals_map: Arc<HashMap<i32, Sender<Instant>>>,
         initial_values_sender: tokio::sync::mpsc::Sender<HashMap<Signal, DataValue>>,
         buffer_size: u32,
-        direction: &Direction,
+        operation: &Operation,
     ) -> Result<(), Error> {
         Self::handle_kuksa_val_v2(
             channel,
@@ -81,7 +81,7 @@ impl ReceivingEnd {
             signals_map,
             initial_values_sender,
             buffer_size,
-            direction,
+            operation,
         )
         .await
     }
@@ -92,15 +92,15 @@ impl ReceivingEnd {
         signals_map: Arc<HashMap<i32, Sender<Instant>>>,
         initial_values_sender: tokio::sync::mpsc::Sender<HashMap<Signal, DataValue>>,
         buffer_size: u32,
-        direction: &Direction,
+        operation: &Operation,
     ) -> Result<(), Error> {
         let mut client = kuksa_val_v2::val_client::ValClient::new(channel);
 
         let mut ids = Vec::with_capacity(signals.len());
         let mut ids_: Vec<SignalId> = Vec::with_capacity(signals.len());
 
-        match direction {
-            Direction::Read => {
+        match operation {
+            Operation::StreamingPublish => {
                 for signal in signals {
                     ids.push(signal.id.unwrap());
                 }
@@ -165,7 +165,7 @@ impl ReceivingEnd {
                     Err(err) => Err(Error::SubscriptionFailed(err.to_string())),
                 }
             }
-            Direction::Write => {
+            Operation::Actuate => {
                 for signal in signals {
                     ids_.push(SignalId {
                         signal: Some(kuksa_val_v2::signal_id::Signal::Id(signal.id.unwrap())),

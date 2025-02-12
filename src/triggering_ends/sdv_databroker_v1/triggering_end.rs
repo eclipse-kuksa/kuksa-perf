@@ -12,7 +12,7 @@
 ********************************************************************************/
 
 use crate::config::Signal;
-use crate::measure::Direction;
+use crate::measure::Operation;
 use crate::triggering_ends::triggering_end_trait::{Error, TriggerError, TriggeringEndInterface};
 use crate::types::DataValue;
 use databroker_proto::sdv::databroker::v1 as proto;
@@ -122,7 +122,7 @@ impl TriggeringEndInterface for TriggeringEnd {
     async fn validate_signals_metadata(
         &mut self,
         signals: &[Signal],
-        _direction: &Direction,
+        _operation: &Operation,
     ) -> Result<Vec<Signal>, Error> {
         let signals: Vec<String> = signals.iter().map(|signal| signal.path.clone()).collect();
         let number_of_signals = signals.len();

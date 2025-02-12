@@ -92,7 +92,7 @@ Usage: databroker-perf [OPTIONS]
 Options:
   -d, --duration <SECONDS>              Number of seconds to run
       --api <API>                       Api of databroker [default: kuksa.val.v1] [possible values: kuksa.val.v1, kuksa.val.v2, sdv.databroker.v1]
-      --direction <DIRECTION>           Api of databroker [default: read] [possible values: read, write]
+      --operation <OPERATION>           Operation that will be measured [default: streaming_publish] [possible values: streaming_publish, actuate]
       --host <HOST>                     Host address of databroker [default: http://127.0.0.1]
       --port <PORT>                     Port of databroker [default: 55555]
       --skip-seconds <SECONDS>          Seconds to run (skip) before measuring the latency
@@ -105,7 +105,7 @@ Options:
   -V, --version                         Print version
 ```
 
-Hint: `--direction write` is only supported for `--api kuksa.val.v2`
+Hint: `--operation actuate` is only supported for `--api kuksa.val.v2`
 
 ```
 ./target/release/databroker-perf [OPTIONS]
