@@ -53,7 +53,7 @@ impl TriggeringEnd {
 
         match operation {
             Operation::StreamingPublish => {
-                tokio::spawn(TriggeringEnd::run(rx, channel.clone()));
+                tokio::spawn(TriggeringEnd::open_provider_stream(rx, channel.clone()));
             }
             Operation::Actuate => (),
         }
@@ -67,7 +67,7 @@ impl TriggeringEnd {
         })
     }
 
-    async fn run(
+    async fn open_provider_stream(
         rx: Receiver<proto::OpenProviderStreamRequest>,
         channel: Channel,
     ) -> Result<(), Error> {
