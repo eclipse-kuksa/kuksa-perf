@@ -134,7 +134,7 @@ async fn main() -> Result<()> {
 
     let operation = if args.operation.contains("streaming_publish") {
         Operation::StreamingPublish
-    } else if args.operation.contains("actuate"){
+    } else if args.operation.contains("actuate") {
         if args.api.contains("sdv.databroker.v1") {
             eprintln!("Error: sdv.databroker.v1 is not supported for measuring actuate operation.");
             std::process::exit(1);
@@ -155,7 +155,7 @@ async fn main() -> Result<()> {
         Api::KuksaValV2
     } else if args.api.contains("kuksa.val.v1") {
         Api::KuksaValV1
-    } else{
+    } else {
         eprintln!("Error: No supported API of databroker given.");
         std::process::exit(1);
     };
