@@ -134,25 +134,30 @@ async fn main() -> Result<()> {
 
     let operation = if args.operation.contains("streaming_publish") {
         Operation::StreamingPublish
-    } else {
+    } else if args.operation.contains("actuate"){
         if args.api.contains("sdv.databroker.v1") {
             eprintln!("Error: sdv.databroker.v1 is not supported for measuring actuate operation.");
             std::process::exit(1);
         } else if args.api.contains("kuksa.val.v2") {
-            Api::KuksaValV2
+            Operation::Actuate
         } else {
             eprintln!("Error: kuksa.val.v1 is not supported for measuring actuate operation.");
             std::process::exit(1);
-        };
-        Operation::Actuate
+        }
+    } else {
+        eprintln!("Error: No operation given.");
+        std::process::exit(1);
     };
 
     let api = if args.api.contains("sdv.databroker.v1") {
         Api::SdvDatabrokerV1
     } else if args.api.contains("kuksa.val.v2") {
         Api::KuksaValV2
-    } else {
+    } else if args.api.contains("kuksa.val.v1") {
         Api::KuksaValV1
+    } else{
+        eprintln!("Error: No supported API of databroker given.");
+        std::process::exit(1);
     };
 
     if args.buffer_size.is_some() && matches!(api, Api::SdvDatabrokerV1 | Api::KuksaValV1) {
