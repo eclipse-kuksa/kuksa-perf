@@ -15,7 +15,7 @@ use crate::triggering_ends::kuksa_val_v1::triggering_end as p_kuksa_val_v1;
 use crate::triggering_ends::kuksa_val_v2::triggering_end as p_kuksa_val_v2;
 use crate::triggering_ends::sdv_databroker_v1::triggering_end as p_sdv_databroker_v1;
 
-use crate::triggering_ends::triggering_end_trait::{TriggerError, TriggeringEndInterface};
+use crate::triggering_ends::triggering_end_trait::TriggeringEndInterface;
 
 use crate::receiving_ends::kuksa_val_v1::receiving_end as s_kuksa_val_v1;
 use crate::receiving_ends::kuksa_val_v2::receiving_end as s_kuksa_val_v2;
@@ -361,7 +361,7 @@ pub async fn perform_measurement(
             .state
             .running
             .store(false, Ordering::SeqCst);
-        if shutdown_handler_clone.trigger.send(()).is_err() {
+        if shutdown_handler_clone.sender.send(()).is_err() {
             println!("failed to trigger shutdown");
         }
     });
@@ -427,7 +427,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
         }
 
         if let Some(interval_to_run) = interval_to_run.as_mut() {
-            let mut shutdown_triggered = ctx.shutdown_handler.trigger.subscribe();
+            let mut shutdown_triggered = ctx.shutdown_handler.sender.subscribe();
             tokio::select! {
                 _ = interval_to_run.tick() => {
                 }
@@ -438,7 +438,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
         }
 
         let triggering_end = ctx.triggering_end.triggering_end_interface.as_ref();
-        let publish_task = triggering_end.trigger(&ctx.signals, iterations);
+        let trigger_task = triggering_end.trigger(&ctx.signals, iterations);
 
         let mut measure_tasks: JoinSet<Result<Instant, Error>> = JoinSet::new();
 
@@ -446,7 +446,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
             // TODO: return an awaitable thingie (wrapping the Receiver<Instant>)
             let receiving_end = ctx.receiving_end.receiving_end_interface.as_ref();
             let mut receiver = receiving_end.get_receiver(signal).await.unwrap();
-            let mut shutdown_triggered = ctx.shutdown_handler.trigger.subscribe();
+            let mut shutdown_triggered = ctx.shutdown_handler.sender.subscribe();
 
             measure_tasks.spawn(async move {
                 // Wait for notification or shutdown
@@ -461,12 +461,12 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
             });
         }
 
-        let published = {
-            let mut shutdown_triggered = ctx.shutdown_handler.trigger.subscribe();
+        let triggered = {
+            let mut shutdown_triggered = ctx.shutdown_handler.sender.subscribe();
             select! {
-                published = publish_task => published,
+                triggered = trigger_task => triggered,
                 _ = shutdown_triggered.recv() => {
-                    Err(TriggerError::Shutdown)
+                    break;
                 }
             }
         }?;
@@ -479,7 +479,7 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
                         continue;
                     }
                     let latency = received
-                        .duration_since(published)
+                        .duration_since(triggered)
                         .as_micros()
                         .try_into()
                         .unwrap();

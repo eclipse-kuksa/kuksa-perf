@@ -24,7 +24,7 @@ use tokio::{
 
 #[derive(Clone)]
 pub struct ShutdownHandler {
-    pub trigger: Sender<()>,
+    pub sender: Sender<()>,
     pub state: Arc<State>,
 }
 
@@ -66,7 +66,7 @@ pub fn setup_shutdown_handler() -> ShutdownHandler {
     });
 
     ShutdownHandler {
-        trigger: shutdown_trigger,
+        sender: shutdown_trigger,
         state,
     }
 }

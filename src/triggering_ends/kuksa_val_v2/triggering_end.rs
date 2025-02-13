@@ -877,7 +877,6 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Tri
         Ok(proto::DataType::Int16Array) => Err(TriggerError::DataTypeError),
         Ok(proto::DataType::Int32Array) => Err(TriggerError::DataTypeError),
         Ok(proto::DataType::Int64Array) => Err(TriggerError::DataTypeError),
-        //Ok(proto::DataType::Uint8Array) => Err(PublishError::DataTypeError),
         Ok(proto::DataType::Uint16Array) => Err(TriggerError::DataTypeError),
         Ok(proto::DataType::Uint32Array) => Err(TriggerError::DataTypeError),
         Ok(proto::DataType::Uint64Array) => Err(TriggerError::DataTypeError),

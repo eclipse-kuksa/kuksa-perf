@@ -182,10 +182,8 @@ impl ReceivingEnd {
                     ),
                 };
 
-                // Wrap the stream in a tonic::Request
                 let request = tonic::Request::new(tokio_stream::iter(vec![args]));
 
-                // Open the stream on the server
                 tokio::spawn(async move {
                     match client.open_provider_stream(request).await {
                         Ok(response) => {
