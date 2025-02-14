@@ -14,7 +14,7 @@
 use anyhow::Result;
 use clap::Parser;
 use config::Group;
-use measure::{perform_measurement, Api, MeasurementConfig};
+use measure::{perform_measurement, Api, MeasurementConfig, Operation};
 use shutdown::setup_shutdown_handler;
 use std::collections::HashSet;
 
@@ -22,9 +22,9 @@ use utils::read_config;
 
 mod config;
 mod measure;
-mod providers;
+mod receiving_ends;
 mod shutdown;
-mod subscribers;
+mod triggering_ends;
 mod types;
 mod utils;
 
@@ -38,6 +38,10 @@ struct Args {
     /// Api of databroker.
     #[clap(long, display_order = 2, default_value = "kuksa.val.v1", value_parser = clap::builder::PossibleValuesParser::new(["kuksa.val.v1", "kuksa.val.v2", "sdv.databroker.v1"]))]
     api: String,
+
+    /// Operation that will be measured.
+    #[clap(long, display_order = 2, default_value = "streaming_publish", value_parser = clap::builder::PossibleValuesParser::new(["streaming_publish", "actuate"]))]
+    operation: String,
 
     /// Host address of databroker.
     #[clap(long, display_order = 3, default_value = "http://127.0.0.1")]
@@ -128,12 +132,36 @@ async fn main() -> Result<()> {
         }
     }
 
-    let api = if args.api.contains("sdv.databroker.v1") {
-        Api::SdvDatabrokerV1
-    } else if args.api.contains("kuksa.val.v2") {
-        Api::KuksaValV2
+    let (operation, api) = if args.operation.contains("streaming_publish") {
+        (
+            Operation::StreamingPublish,
+            if args.api.contains("sdv.databroker.v1") {
+                Api::SdvDatabrokerV1
+            } else if args.api.contains("kuksa.val.v2") {
+                Api::KuksaValV2
+            } else if args.api.contains("kuksa.val.v1") {
+                Api::KuksaValV1
+            } else {
+                eprintln!("Error: No supported API of databroker given.");
+                std::process::exit(1);
+            },
+        )
+    } else if args.operation.contains("actuate") {
+        if args.api.contains("sdv.databroker.v1") {
+            eprintln!("Error: sdv.databroker.v1 is not supported for measuring actuate operation.");
+            std::process::exit(1);
+        } else if args.api.contains("kuksa.val.v2") {
+            (Operation::Actuate, Api::KuksaValV2)
+        } else if args.api.contains("kuksa.val.v1") {
+            eprintln!("Error: sdv.databroker.v1 is not supported for measuring actuate operation.");
+            std::process::exit(1);
+        } else {
+            eprintln!("Error: No supported API of databroker given.");
+            std::process::exit(1);
+        }
     } else {
-        Api::KuksaValV1
+        eprintln!("Error: No operation given.");
+        std::process::exit(1);
     };
 
     if args.buffer_size.is_some() && matches!(api, Api::SdvDatabrokerV1 | Api::KuksaValV1) {
@@ -154,6 +182,7 @@ async fn main() -> Result<()> {
         interval: 0,
         skip_seconds: args.skip_seconds,
         api,
+        operation,
         detailed_output: args.detailed_output,
         buffer_size: args.buffer_size,
     };

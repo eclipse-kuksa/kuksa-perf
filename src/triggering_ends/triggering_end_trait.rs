@@ -19,17 +19,20 @@ use tonic::async_trait;
 use thiserror::Error;
 use tokio::time::Instant;
 
-use crate::{config::Signal, types::DataValue};
+use crate::{config::Signal, measure::Operation, types::DataValue};
 
 #[async_trait]
-pub trait ProviderInterface: Send + Sync {
-    async fn publish(
+pub trait TriggeringEndInterface: Send + Sync {
+    async fn trigger(
         &self,
         signal_data: &[Signal],
         iteration: u64,
-    ) -> Result<Instant, PublishError>;
-    async fn validate_signals_metadata(&mut self, signals: &[Signal])
-        -> Result<Vec<Signal>, Error>;
+    ) -> Result<Instant, TriggerError>;
+    async fn validate_signals_metadata(
+        &mut self,
+        signals: &[Signal],
+        operation: &Operation,
+    ) -> Result<Vec<Signal>, Error>;
     async fn set_initial_signals_values(
         &mut self,
         initial_signals_values: HashMap<Signal, DataValue>,
@@ -40,12 +43,12 @@ pub trait ProviderInterface: Send + Sync {
 pub(crate) enum Error {
     #[error("failed to fetch signal metadata: {0}")]
     MetadataError(String),
-    #[error("publish error")]
-    PublishError(#[from] PublishError),
+    #[error("trigger error: {0}")]
+    TriggerError(#[from] TriggerError),
 }
 
 #[derive(Error, Debug)]
-pub enum PublishError {
+pub enum TriggerError {
     // #[error("the signal has not been registered")]
     // NotRegistered,
     #[error("failed to send new value: {0}")]
@@ -59,4 +62,7 @@ pub enum PublishError {
 
     #[error("Metadata error")]
     MetadataError,
+
+    #[error("Signal {0} is not an actuator")]
+    NoActuator(String),
 }

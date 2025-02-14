@@ -37,6 +37,6 @@ pub enum Error {
 }
 
 #[async_trait]
-pub trait SubscriberInterface: Send + Sync {
-    async fn wait_for(&self, signal: &Signal) -> Result<Receiver<Instant>, Error>;
+pub trait ReceivingEndInterface: Send + Sync {
+    async fn get_receiver(&self, signal: &Signal) -> Result<Receiver<Instant>, Error>;
 }

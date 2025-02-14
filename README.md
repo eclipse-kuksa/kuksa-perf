@@ -1,6 +1,6 @@
 # Eclipse Kuksa databroker-perf
 
-Performance measurement app for KUKSA databroker.
+Performance measurement app for KUKSA databroker. It measures end-to-end latencies between triggering ends (e.g. provided signals or actuation requests) and receiving ends (e.g. subscribing signals or picking up actuation requests).
 
 ```
 [00:00:05] [================================================================================================================]       5/5       seconds
@@ -90,17 +90,22 @@ If running on MacOS:
 Usage: databroker-perf [OPTIONS]
 
 Options:
-  -d, --duration <SECONDS>      Number of seconds to run
-      --api <API>               Api of databroker [default: kuksa.val.v1] [possible values: kuksa.val.v1, kuksa.val.v2, sdv.databroker.v1]
-      --host <HOST>             Host address of databroker [default: http://127.0.0.1]
-      --port <PORT>             Port of databroker [default: 55555]
-      --skip-seconds <SECONDS>  Seconds to run (skip) before measuring the latency
-      --detailed-output         Print more details in the summary result
-      --test-data-file <FILE>   Path to test data file
-  -v, --verbosity <LEVEL>       Verbosity level. Can be one of ERROR, WARN, INFO, DEBUG, TRACE [default: WARN]
-  -h, --help                    Print help
-  -V, --version                 Print version
+  -d, --duration <SECONDS>              Number of seconds to run
+      --api <API>                       Api of databroker [default: kuksa.val.v1] [possible values: kuksa.val.v1, kuksa.val.v2, sdv.databroker.v1]
+      --operation <OPERATION>           Operation that will be measured [default: streaming_publish] [possible values: streaming_publish, actuate]
+      --host <HOST>                     Host address of databroker [default: http://127.0.0.1]
+      --port <PORT>                     Port of databroker [default: 55555]
+      --skip-seconds <SECONDS>          Seconds to run (skip) before measuring the latency
+      --unix-socket <UNIX_SOCKET_PATH>  Unix socket path of databroker
+      --detailed-output                 Print more details in the summary result
+      --buffer-size <BUFFER_SIZE>       kuksa.val.v2 subscription buffer_size
+      --test-data-file <FILE>           Path to test data file
+  -v, --verbosity <LEVEL>               Verbosity level. Can be one of ERROR, WARN, INFO, DEBUG, TRACE [default: WARN]
+  -h, --help                            Print help
+  -V, --version                         Print version
 ```
+
+Hint: `--operation actuate` is only supported for `--api kuksa.val.v2`
 
 ```
 ./target/release/databroker-perf [OPTIONS]
@@ -157,8 +162,8 @@ For a detailed output of the results, please enable the corresponding flag like:
 
 ## Group config file
 
-Databroker-perf creates two new gRPC channels for each group: one for the provider and one for the subscriber.
-Each provider will update its group signal values to the Databroker at the cycle time specified (in milliseconds) in the JSON configuration file provided.
+Databroker-perf creates two new gRPC channels for each group: one for the triggering end and one for the receiving end.
+Each triggering end will update its group signal values to the Databroker at the cycle time specified (in milliseconds) in the JSON configuration file provided.
 
 i. e.
 ```
@@ -196,25 +201,25 @@ i. e.
 ## Example with config file
 
 ```
-./target/release/databroker-perf --test-data-file data/data_group_10.json
+./target/release/databroker-perf --test-data-file data/sensors/data_group_10.json
 ```
 
 If running on MacOS:
 
 ```
-./target/release/databroker-perf --test-data-file data/data_group_10.json --port 55556
+./target/release/databroker-perf --test-data-file data/sensors/data_group_10.json --port 55556
 ```
 
 ## Example with API
 
 ```
-./target/release/databroker-perf --api sdv.databroker.v1 --test-data-file data/data_group_10.json
+./target/release/databroker-perf --api sdv.databroker.v1 --test-data-file data/sensors/data_group_10.json
 ```
 
 If running on MacOS:
 
 ```
-./target/release/databroker-perf --api sdv.databroker.v1 --test-data-file data/data_group_10.json --port 55556
+./target/release/databroker-perf --api sdv.databroker.v1 --test-data-file data/sensors/data_group_10.json --port 55556
 ```
 
 ## Contributing
