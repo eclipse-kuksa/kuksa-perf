@@ -21,7 +21,7 @@ edition = "2021"
 [dependencies]
 databroker-proto = { git = "https://github.com/eclipse-kuksa/kuksa-databroker.git", branch = "main", package = "databroker-proto" }
 hdrhistogram = { version = "7.5.4", default-features = false }
-tokio = { version = "1.20", features = ["full"] }
+tokio = { version = "1.43", features = ["full"] }
 tokio-stream = { version = "0.1.8" }
 tonic = { version = "0.11.0", default-features = false }
 tonic-build = { version = "0.11.0", default-features = false }
