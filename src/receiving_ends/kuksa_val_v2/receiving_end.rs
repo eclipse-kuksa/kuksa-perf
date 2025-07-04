@@ -14,7 +14,8 @@
 use databroker_proto::kuksa::val::v2::{
     self as kuksa_val_v2,
     open_provider_stream_response::Action::{
-        BatchActuateStreamRequest, ProvideActuationResponse, PublishValuesResponse,
+        BatchActuateStreamRequest, GetProviderValueRequest, ProvideActuationResponse,
+        ProvideSignalResponse, PublishValuesResponse, UpdateFilterRequest,
     },
     SignalId,
 };
@@ -108,6 +109,7 @@ impl ReceivingEnd {
                 let args = tonic::Request::new(kuksa_val_v2::SubscribeByIdRequest {
                     buffer_size,
                     signal_ids: ids,
+                    filter: None,
                 });
 
                 match client.subscribe_by_id(args).await {
@@ -216,6 +218,9 @@ impl ReceivingEnd {
                                                 }
                                             }
                                         }
+                                        Some(ProvideSignalResponse(_)) => {}
+                                        Some(UpdateFilterRequest(_)) => {}
+                                        Some(GetProviderValueRequest(_)) => {}
                                         None => {}
                                     }
                                 }

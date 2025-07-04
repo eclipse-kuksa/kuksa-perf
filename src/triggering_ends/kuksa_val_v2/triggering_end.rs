@@ -19,9 +19,11 @@ use crate::types::DataValue;
 use databroker_proto::kuksa::val::v2::{
     self as proto, open_provider_stream_request,
     open_provider_stream_response::Action::{
-        BatchActuateStreamRequest, ProvideActuationResponse, PublishValuesResponse,
+        BatchActuateStreamRequest, GetProviderValueRequest, ProvideActuationResponse,
+        ProvideSignalResponse, PublishValuesResponse, UpdateFilterRequest,
     },
 };
+use databroker_proto::kuksa::val::v2::{OpenProviderStreamRequest, SampleInterval};
 
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -45,6 +47,19 @@ pub struct TriggeringEnd {
     channel: Channel,
     initial_signals_values: HashMap<Signal, DataValue>,
     operation: Operation,
+}
+
+fn build_registration_signal_request(signals: Vec<i32>) -> OpenProviderStreamRequest {
+    proto::OpenProviderStreamRequest {
+        action: Some(open_provider_stream_request::Action::ProvideSignalRequest(
+            proto::ProvideSignalRequest {
+                signals_sample_intervals: signals
+                    .iter()
+                    .map(|signal_id| (*signal_id, SampleInterval { interval_ms: 1 }))
+                    .collect(),
+            },
+        )),
+    }
 }
 
 impl TriggeringEnd {
@@ -94,6 +109,9 @@ impl TriggeringEnd {
                                 }
                             }
                             Some(BatchActuateStreamRequest(_)) => {}
+                            Some(ProvideSignalResponse(_)) => {}
+                            Some(UpdateFilterRequest(_)) => {}
+                            Some(GetProviderValueRequest(_)) => {}
                             None => {}
                         }
                     }
@@ -119,7 +137,7 @@ impl TriggeringEndInterface for TriggeringEnd {
     ) -> Result<Instant, TriggerError> {
         match self.operation {
             Operation::StreamingPublish => {
-                let datapoints = if iteration == 0 {
+                let data_points = if iteration == 0 {
                     HashMap::from_iter(signal_data.iter().map(|signal: &Signal| {
                         let metadata = self.metadata.get(&signal.path).unwrap();
                         let mut new_value = n_to_value(metadata.clone(), iteration).unwrap();
@@ -152,8 +170,8 @@ impl TriggeringEndInterface for TriggeringEnd {
                 let payload = proto::OpenProviderStreamRequest {
                     action: Some(open_provider_stream_request::Action::PublishValuesRequest(
                         proto::PublishValuesRequest {
-                            request_id: 1_i32,
-                            datapoints,
+                            request_id: 1_u32,
+                            data_points,
                         },
                     )),
                 };
@@ -211,7 +229,7 @@ impl TriggeringEndInterface for TriggeringEnd {
         signals: &[Signal],
         operation: &Operation,
     ) -> Result<Vec<Signal>, Error> {
-        let signals: Vec<String> = signals.iter().map(|signal| signal.path.clone()).collect();
+        let signals_vec: Vec<String> = signals.iter().map(|signal| signal.path.clone()).collect();
         let number_of_signals = signals.len();
 
         let mut client: proto::val_client::ValClient<Channel> =
@@ -219,9 +237,9 @@ impl TriggeringEndInterface for TriggeringEnd {
                 .max_decoding_message_size(64 * 1024 * 1024)
                 .max_encoding_message_size(64 * 1024 * 1024);
 
-        let mut signals_response = Vec::with_capacity(signals.len());
+        let mut signals_response = Vec::with_capacity(signals_vec.len());
 
-        let requests_entries: Vec<proto::ListMetadataRequest> = signals
+        let requests_entries: Vec<proto::ListMetadataRequest> = signals_vec
             .iter()
             .map(|path| proto::ListMetadataRequest {
                 root: path.to_string(),
@@ -262,7 +280,7 @@ impl TriggeringEndInterface for TriggeringEnd {
             self.metadata.len()
         );
         if self.metadata.len() < number_of_signals {
-            let missing_signals: Vec<_> = signals
+            let missing_signals: Vec<_> = signals_vec
                 .iter()
                 .filter(|signal| !self.metadata.contains_key(signal.as_str()))
                 .collect();
@@ -271,6 +289,14 @@ impl TriggeringEndInterface for TriggeringEnd {
                 "The following signals are missing in the databroker: {missing_signals:?}"
             )))
         } else {
+            //Register signals after validation
+            let _ = self
+                .tx
+                .send(build_registration_signal_request(
+                    self.id_to_path.keys().cloned().collect(),
+                ))
+                .await;
+
             Ok(signals_response)
         }
     }
