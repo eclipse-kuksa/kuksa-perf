@@ -252,7 +252,7 @@ impl TriggeringEndInterface for TriggeringEnd {
                 }
                 Err(status) => {
                     // Handle the Err case without returning a value
-                    eprintln!("gRPC call failed with status: {:?}", status);
+                    eprintln!("gRPC call failed with status: {status:?}");
                 }
             }
         }
@@ -268,8 +268,7 @@ impl TriggeringEndInterface for TriggeringEnd {
                 .collect();
 
             Err(Error::MetadataError(format!(
-                "The following signals are missing in the databroker: {:?}",
-                missing_signals
+                "The following signals are missing in the databroker: {missing_signals:?}"
             )))
         } else {
             Ok(signals_response)

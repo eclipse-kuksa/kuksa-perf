@@ -135,7 +135,7 @@ impl TriggeringEndInterface for TriggeringEnd {
                 names: signals.clone(),
             }))
             .await
-            .map_err(|err| Error::MetadataError(format!("failed to fetch metadata: {}", err)))?;
+            .map_err(|err| Error::MetadataError(format!("failed to fetch metadata: {err}")))?;
 
         let signals_response: Vec<Signal> = response
             .into_inner()
@@ -163,8 +163,7 @@ impl TriggeringEndInterface for TriggeringEnd {
                 .collect();
 
             Err(Error::MetadataError(format!(
-                "The following signals are missing in the databroker: {:?}",
-                missing_signals
+                "The following signals are missing in the databroker: {missing_signals:?}"
             )))
         } else {
             Ok(signals_response)

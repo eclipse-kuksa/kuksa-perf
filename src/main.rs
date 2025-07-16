@@ -124,8 +124,7 @@ async fn main() -> Result<()> {
         } else if let Some(skip_seconds) = args.skip_seconds {
             if duration <= skip_seconds {
                 eprintln!(
-                    "Error: `duration` ({}) cannot be smaller or equal than `skip_seconds` ({}).",
-                    duration, skip_seconds
+                    "Error: `duration` ({duration}) cannot be smaller or equal than `skip_seconds` ({skip_seconds})."
                 );
                 std::process::exit(1);
             }
