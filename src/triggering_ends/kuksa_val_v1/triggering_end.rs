@@ -171,7 +171,7 @@ impl TriggeringEndInterface for TriggeringEnd {
         let response = client
             .get(proto::GetRequest { entries })
             .await
-            .map_err(|err| Error::MetadataError(format!("failed to fetch metadata: {}", err)))?;
+            .map_err(|err| Error::MetadataError(format!("failed to fetch metadata: {err}")))?;
 
         for entry in response.into_inner().entries.iter() {
             if let Some(metadata) = &entry.metadata {
@@ -195,8 +195,7 @@ impl TriggeringEndInterface for TriggeringEnd {
                 .collect();
 
             Err(Error::MetadataError(format!(
-                "The following signals are missing in the databroker: {:?}",
-                missing_signals
+                "The following signals are missing in the databroker: {missing_signals:?}"
             )))
         } else {
             Ok(signals_response)

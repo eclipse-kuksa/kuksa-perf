@@ -124,8 +124,7 @@ async fn main() -> Result<()> {
         } else if let Some(skip_seconds) = args.skip_seconds {
             if duration <= skip_seconds {
                 eprintln!(
-                    "Error: `duration` ({}) cannot be smaller or equal than `skip_seconds` ({}).",
-                    duration, skip_seconds
+                    "Error: `duration` ({duration}) cannot be smaller or equal than `skip_seconds` ({skip_seconds})."
                 );
                 std::process::exit(1);
             }
@@ -187,6 +186,9 @@ async fn main() -> Result<()> {
         buffer_size: args.buffer_size,
     };
 
+    if cfg!(debug_assertions) {
+        println!("Warning: You are running a debug build of kuksa-perf. This may affect performance measurements. If you want to run performance measurements, it is recommended you use a release build (cargo build --release).");
+    }
     perform_measurement(measurement_config, config_groups, shutdown_handler).await?;
     Ok(())
 }

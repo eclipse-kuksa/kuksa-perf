@@ -37,9 +37,9 @@ pub fn read_config(config_file: Option<&String>) -> Result<Vec<Group>> {
             let file = OpenOptions::new()
                 .read(true)
                 .open(filename)
-                .with_context(|| format!("Failed to open configuration file '{}'", filename))?;
+                .with_context(|| format!("Failed to open configuration file '{filename}'"))?;
             let config: Config = from_reader(file)
-                .with_context(|| format!("Failed to parse configuration file '{}'", filename))?;
+                .with_context(|| format!("Failed to parse configuration file '{filename}'"))?;
 
             Ok(config.groups)
         }
@@ -165,23 +165,19 @@ pub fn write_global_output(
             global_end_time.as_secs() // Return the adjusted seconds
         }
     };
-    writeln!(stdout, "  Total elapsed seconds: {}", total_elapsed_seconds)?;
+    writeln!(stdout, "  Total elapsed seconds: {total_elapsed_seconds}")?;
 
     let skip_seconds = match measurement_config.skip_seconds {
         Some(seconds) => {
-            writeln!(stdout, "  Skipped test seconds: {}", seconds)?;
+            writeln!(stdout, "  Skipped test seconds: {seconds}")?;
             seconds
         }
         None => 0,
     };
 
-    writeln!(stdout, "  Total signals: {} signals", global_signals_len,)?;
-    writeln!(stdout, "  Sent: {} signal updates", global_signals_sent,)?;
-    writeln!(
-        stdout,
-        "  Skipped: {} signal updates",
-        global_signals_skipped
-    )?;
+    writeln!(stdout, "  Total signals: {global_signals_len} signals",)?;
+    writeln!(stdout, "  Sent: {global_signals_sent} signal updates",)?;
+    writeln!(stdout, "  Skipped: {global_signals_skipped} signal updates")?;
     writeln!(stdout, "  Received: {} signal updates", global_hist.len())?;
 
     let elapsed_seconds = match measurement_config.duration {
@@ -245,9 +241,9 @@ pub fn write_output(measurement_result: &MeasurementResult) -> Result<()> {
     )?;
     let rate_limit = match measurement_config.interval {
         0 => "None".into(),
-        ms => format!("{} ms between iterations", ms),
+        ms => format!("{ms} ms between iterations"),
     };
-    writeln!(stdout, "  Rate limit: {}", rate_limit)?;
+    writeln!(stdout, "  Rate limit: {rate_limit}")?;
     writeln!(
         stdout,
         "  Sent: {} iterations * {} signals = {} updates",
@@ -268,7 +264,7 @@ pub fn write_output(measurement_result: &MeasurementResult) -> Result<()> {
 
     let skip_seconds = match measurement_config.skip_seconds {
         Some(seconds) => {
-            writeln!(stdout, "  Skipped test seconds: {}", seconds)?;
+            writeln!(stdout, "  Skipped test seconds: {seconds}")?;
             seconds
         }
         None => 0,
@@ -279,7 +275,7 @@ pub fn write_output(measurement_result: &MeasurementResult) -> Result<()> {
         None => measurement_context.hist.len() / (total_duration.as_secs() - skip_seconds),
     };
 
-    writeln!(stdout, "  Throughput: {} signal/second", throughput)?;
+    writeln!(stdout, "  Throughput: {throughput} signal/second")?;
 
     writeln!(
         stdout,
@@ -325,7 +321,7 @@ pub fn output_latency_to_file(
     fs::create_dir_all(output_dir)?;
 
     // Create the file path within the output directory
-    let file_path = format!("{}/{}.csv", output_dir, group_name);
+    let file_path = format!("{output_dir}/{group_name}.csv");
     // Create the CSV file using the group name
     let file = File::create(&file_path)?;
     let mut writer = Writer::from_writer(file);

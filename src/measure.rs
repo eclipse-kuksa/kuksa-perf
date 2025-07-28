@@ -162,7 +162,7 @@ async fn create_unix_socket_channel(path: impl AsRef<Path>) -> Result<Channel> {
 }
 
 async fn create_tcp_channel(host: String, port: u64) -> Result<Channel> {
-    let databroker_address = format!("{}:{}", host, port);
+    let databroker_address = format!("{host}:{port}");
 
     let endpoint = tonic::transport::Channel::from_shared(databroker_address.clone())
         .with_context(|| "Failed to parse server url")?;
@@ -180,7 +180,7 @@ async fn create_tcp_channel(host: String, port: u64) -> Result<Channel> {
             .uri()
             .port()
             .map_or("unknown port".to_string(), |p| p.to_string());
-        format!("Failed to connect to server {}:{}", host, port)
+        format!("Failed to connect to server {host}:{port}")
     })?;
 
     Ok(channel)
@@ -252,7 +252,7 @@ pub async fn perform_measurement(
 
         let signals = match ve {
             Ok(vec) => vec,
-            Err(e) => panic!("Error: {}", e),
+            Err(e) => panic!("Error: {e}"),
         };
         // Initialize receiving_end and initialize initial signal values.
         let (initial_values_sender, mut initial_values_reciever) =
