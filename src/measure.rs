@@ -374,11 +374,11 @@ pub async fn perform_measurement(
                 measurements_results.push(measurement_result);
             }
             Ok(Err(err)) => {
-                error!("{}", err);
+                error!("{err}");
                 break;
             }
             Err(err) => {
-                error!("{}", err);
+                error!("{err}");
                 break;
             }
         }
@@ -491,11 +491,11 @@ async fn measurement_loop(ctx: &mut MeasurementContext) -> Result<(u64, u64)> {
                     break;
                 }
                 Ok(Err(err)) => {
-                    error!("{}", err);
+                    error!("{err}");
                     break;
                 }
                 Err(err) => {
-                    error!("{}", err);
+                    error!("{err}");
                     break;
                 }
             }

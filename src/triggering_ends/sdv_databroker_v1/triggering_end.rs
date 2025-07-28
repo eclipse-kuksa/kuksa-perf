@@ -72,7 +72,7 @@ impl TriggeringEnd {
                                     .unwrap()
                                     .as_str_name();
                                 let id = error.0;
-                                error!("{}: error setting datapoint {}", error_code, id)
+                                error!("{error_code}: error setting datapoint {id}")
                             }
                         }
                         None => {

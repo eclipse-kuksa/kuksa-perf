@@ -68,7 +68,7 @@ impl TriggeringEnd {
                             for error in message.errors {
                                 let path = error.path;
                                 let error_code = error.error.unwrap().code;
-                                error!("{}: error setting datapoint {}", error_code, path)
+                                error!("{error_code}: error setting datapoint {path}")
                             }
                         }
                         None => {
