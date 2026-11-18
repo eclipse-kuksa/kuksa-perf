@@ -353,7 +353,7 @@ pub async fn perform_measurement(
         {
             if !run_forever {
                 progress_bar_task.set_position(start_run.elapsed().as_secs());
-            } else if start_run.elapsed().as_millis() % 100 == 0 {
+            } else if start_run.elapsed().as_millis().is_multiple_of(100) {
                 progress_bar_task.tick();
             }
         }

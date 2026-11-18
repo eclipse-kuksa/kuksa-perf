@@ -185,8 +185,8 @@ pub fn n_to_value(
 ) -> Result<proto::datapoint::Value, TriggerError> {
     match proto::DataType::try_from(metadata.data_type) {
         Ok(proto::DataType::String) => {
-            if metadata.allowed.is_some() {
-                match metadata.allowed.unwrap().values {
+            if let Some(allowed) = metadata.allowed {
+                match allowed.values {
                     Some(proto::allowed::Values::StringValues(values)) => {
                         let index = n % values.values.len() as u64;
                         let value = values.values[index as usize].clone();
@@ -611,8 +611,8 @@ pub fn n_to_value(
             }
         }
         Ok(proto::DataType::StringArray) => {
-            if metadata.allowed.is_some() {
-                match metadata.allowed.unwrap().values {
+            if let Some(allowed) = metadata.allowed {
+                match allowed.values {
                     Some(proto::allowed::Values::StringValues(values)) => {
                         let index = n % values.values.len() as u64;
                         let value = values.values[index as usize].clone();
@@ -628,8 +628,8 @@ pub fn n_to_value(
             }))
         }
         Ok(proto::DataType::Uint8Array) => {
-            if metadata.allowed.is_some() {
-                match metadata.allowed.unwrap().values {
+            if let Some(allowed) = metadata.allowed {
+                match allowed.values {
                     Some(proto::allowed::Values::Uint32Values(values)) => {
                         let index = n % values.values.len() as u64;
                         let value = values.values[index as usize];
