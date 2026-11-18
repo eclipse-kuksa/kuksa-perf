@@ -13,7 +13,6 @@
 
 use std::collections::HashMap;
 
-use log::error;
 use tonic::async_trait;
 
 use thiserror::Error;
@@ -22,6 +21,7 @@ use tokio::time::Instant;
 use crate::{config::Signal, measure::Operation, types::DataValue};
 
 #[async_trait]
+#[allow(clippy::double_must_use)]
 pub trait TriggeringEndInterface: Send + Sync {
     async fn trigger(
         &self,

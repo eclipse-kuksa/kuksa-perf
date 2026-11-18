@@ -13,7 +13,6 @@
 
 use tokio::sync::broadcast::Receiver;
 
-use log::error;
 use tonic::async_trait;
 
 use thiserror::Error;
@@ -37,6 +36,7 @@ pub enum Error {
 }
 
 #[async_trait]
+#[allow(clippy::double_must_use)]
 pub trait ReceivingEndInterface: Send + Sync {
     async fn get_receiver(&self, signal: &Signal) -> Result<Receiver<Instant>, Error>;
 }

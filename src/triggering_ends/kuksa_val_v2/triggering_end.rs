@@ -313,8 +313,7 @@ impl TriggeringEndInterface for TriggeringEnd {
 pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, TriggerError> {
     match proto::DataType::try_from(metadata.data_type) {
         Ok(proto::DataType::String) => {
-            if metadata.allowed_values.is_some() {
-                let allowed = metadata.allowed_values.unwrap();
+            if let Some(allowed) = metadata.allowed_values {
                 if let Some(proto::value::TypedValue::StringArray(values)) = allowed.typed_value {
                     let index = n % values.values.len() as u64;
                     let value = values.values[index as usize].clone();
@@ -850,8 +849,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Tri
             }
         }
         Ok(proto::DataType::StringArray) => {
-            if metadata.allowed_values.is_some() {
-                let allowed = metadata.allowed_values.unwrap();
+            if let Some(allowed) = metadata.allowed_values {
                 if let Some(proto::value::TypedValue::StringArray(values)) = allowed.typed_value {
                     let index = n % values.values.len() as u64;
                     let value = values.values[index as usize].clone();
@@ -874,8 +872,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Tri
             }
         }
         Ok(proto::DataType::Uint8Array) => {
-            if metadata.allowed_values.is_some() {
-                let allowed = metadata.allowed_values.unwrap();
+            if let Some(allowed) = metadata.allowed_values {
                 if let Some(proto::value::TypedValue::Uint32Array(values)) = allowed.typed_value {
                     let index = n % values.values.len() as u64;
                     let value = values.values[index as usize];

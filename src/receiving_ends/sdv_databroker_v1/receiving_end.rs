@@ -94,11 +94,9 @@ impl ReceivingEnd {
                             let now = Instant::now();
                             update
                                 .fields
-                                .iter()
-                                .filter_map(|(path, _datapoint)| {
-                                    signals_map.get(path).map(|sender| (path, sender))
-                                })
-                                .for_each(|(_, sender)| {
+                                .keys()
+                                .filter_map(|path| signals_map.get(path))
+                                .for_each(|sender| {
                                     // If no one is subscribed, the send fails, which is fine.
                                     let _ = sender.send(now);
                                 });
