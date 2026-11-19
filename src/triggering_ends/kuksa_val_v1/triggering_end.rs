@@ -1,18 +1,19 @@
 /********************************************************************************
-* Copyright (c) 2024 Contributors to the Eclipse Foundation
-*
-* See the NOTICE file(s) distributed with this work for additional
-* information regarding copyright ownership.
-*
-* This program and the accompanying materials are made available under the
-* terms of the Apache License 2.0 which is available at
-* http://www.apache.org/licenses/LICENSE-2.0
-*
-* SPDX-License-Identifier: Apache-2.0
-********************************************************************************/
+ * Copyright (c) 2024 Contributors to the Eclipse Foundation
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information regarding copyright ownership.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License 2.0 which is available at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ********************************************************************************/
 
 use crate::config::Signal;
-use crate::providers::provider_trait::{Error, ProviderInterface, PublishError};
+use crate::measure::Operation;
+use crate::triggering_ends::triggering_end_trait::{Error, TriggerError, TriggeringEndInterface};
 use crate::types::DataValue;
 use databroker_proto::kuksa::val::v1 as proto;
 
@@ -31,19 +32,19 @@ use tonic::transport::Channel;
 
 use std::collections::HashMap;
 
-pub struct Provider {
+pub struct TriggeringEnd {
     tx: Sender<proto::StreamedUpdateRequest>,
     metadata: HashMap<String, proto::Metadata>,
     channel: Channel,
     initial_signals_values: HashMap<Signal, DataValue>,
 }
 
-impl Provider {
+impl TriggeringEnd {
     pub fn new(channel: Channel) -> Result<Self, Error> {
         let (tx, rx) = mpsc::channel(10);
 
-        tokio::spawn(Provider::run(rx, channel.clone()));
-        Ok(Provider {
+        tokio::spawn(TriggeringEnd::run(rx, channel.clone()));
+        Ok(TriggeringEnd {
             tx,
             metadata: HashMap::new(),
             channel,
@@ -67,7 +68,7 @@ impl Provider {
                             for error in message.errors {
                                 let path = error.path;
                                 let error_code = error.error.unwrap().code;
-                                error!("{}: error setting datapoint {}", error_code, path)
+                                error!("{error_code}: error setting datapoint {path}")
                             }
                         }
                         None => {
@@ -87,12 +88,12 @@ impl Provider {
 }
 
 #[async_trait]
-impl ProviderInterface for Provider {
-    async fn publish(
+impl TriggeringEndInterface for TriggeringEnd {
+    async fn trigger(
         &self,
         signal_data: &[Signal],
         iteration: u64,
-    ) -> Result<Instant, PublishError> {
+    ) -> Result<Instant, TriggerError> {
         let updates = if iteration == 0 {
             Vec::from_iter(signal_data.iter().map(|signal| {
                 let metadata = self.metadata.get(&signal.path).unwrap();
@@ -139,13 +140,14 @@ impl ProviderInterface for Provider {
         self.tx
             .send(payload)
             .await
-            .map_err(|err| PublishError::SendFailure(err.to_string()))?;
+            .map_err(|err| TriggerError::SendFailure(err.to_string()))?;
         Ok(now)
     }
 
     async fn validate_signals_metadata(
         &mut self,
         signals: &[Signal],
+        _operation: &Operation,
     ) -> Result<Vec<Signal>, Error> {
         let signals: Vec<String> = signals.iter().map(|signal| signal.path.clone()).collect();
         let number_of_signals = signals.len();
@@ -169,7 +171,7 @@ impl ProviderInterface for Provider {
         let response = client
             .get(proto::GetRequest { entries })
             .await
-            .map_err(|err| Error::MetadataError(format!("failed to fetch metadata: {}", err)))?;
+            .map_err(|err| Error::MetadataError(format!("failed to fetch metadata: {err}")))?;
 
         for entry in response.into_inner().entries.iter() {
             if let Some(metadata) = &entry.metadata {
@@ -193,8 +195,7 @@ impl ProviderInterface for Provider {
                 .collect();
 
             Err(Error::MetadataError(format!(
-                "The following signals are missing in the databroker: {:?}",
-                missing_signals
+                "The following signals are missing in the databroker: {missing_signals:?}"
             )))
         } else {
             Ok(signals_response)
@@ -213,9 +214,9 @@ impl ProviderInterface for Provider {
 pub fn n_to_value(
     metadata: &proto::Metadata,
     n: u64,
-) -> Result<proto::datapoint::Value, PublishError> {
+) -> Result<proto::datapoint::Value, TriggerError> {
     match proto::DataType::try_from(metadata.data_type) {
-        Ok(proto::DataType::Unspecified) => Err(PublishError::Shutdown),
+        Ok(proto::DataType::Unspecified) => Err(TriggerError::Shutdown),
         Ok(proto::DataType::String) => match &metadata.value_restriction {
             Some(value_restriction) => match &value_restriction.r#type {
                 Some(proto::value_restriction::Type::String(values)) => {
@@ -223,7 +224,7 @@ pub fn n_to_value(
                     let value = values.allowed_values[index as usize].clone();
                     Ok(proto::datapoint::Value::String(value))
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::String(n.to_string())),
         },
@@ -253,7 +254,7 @@ pub fn n_to_value(
                         Ok(proto::datapoint::Value::Int32((n % 128) as i32))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::Int32((n % 128) as i32)),
         },
@@ -279,7 +280,7 @@ pub fn n_to_value(
                         Ok(proto::datapoint::Value::Int32((n % 128) as i32))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::Int32((n % 128) as i32)),
         },
@@ -305,7 +306,7 @@ pub fn n_to_value(
                         Ok(proto::datapoint::Value::Int32((n % 128) as i32))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::Int32((n % 128) as i32)),
         },
@@ -331,7 +332,7 @@ pub fn n_to_value(
                         Ok(proto::datapoint::Value::Int64((n % 128) as i64))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::Int64((n % 128) as i64)),
         },
@@ -357,7 +358,7 @@ pub fn n_to_value(
                         Ok(proto::datapoint::Value::Uint32((n % 128) as u32))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::Uint32((n % 128) as u32)),
         },
@@ -383,7 +384,7 @@ pub fn n_to_value(
                         Ok(proto::datapoint::Value::Uint32((n % 128) as u32))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::Uint32((n % 128) as u32)),
         },
@@ -409,7 +410,7 @@ pub fn n_to_value(
                         Ok(proto::datapoint::Value::Uint32((n % 128) as u32))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::Uint32((n % 128) as u32)),
         },
@@ -435,7 +436,7 @@ pub fn n_to_value(
                         Ok(proto::datapoint::Value::Uint64(n % 128))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::Uint64(n % 128)),
         },
@@ -461,7 +462,7 @@ pub fn n_to_value(
                         Ok(proto::datapoint::Value::Float((n % 128) as f32))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::Float((n % 128) as f32)),
         },
@@ -487,7 +488,7 @@ pub fn n_to_value(
                         Ok(proto::datapoint::Value::Double((n % 128) as f64))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::Double((n % 128) as f64)),
         },
@@ -500,7 +501,7 @@ pub fn n_to_value(
                         values: vec![value],
                     }))
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::StringArray(proto::StringArray {
                 values: vec![n.to_string()],
@@ -539,7 +540,7 @@ pub fn n_to_value(
                         }))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::Int32Array(proto::Int32Array {
                 values: vec![(n % 128) as i32],
@@ -573,7 +574,7 @@ pub fn n_to_value(
                         }))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::Int32Array(proto::Int32Array {
                 values: vec![(n % 128) as i32],
@@ -607,7 +608,7 @@ pub fn n_to_value(
                         }))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::Int32Array(proto::Int32Array {
                 values: vec![(n % 128) as i32],
@@ -641,7 +642,7 @@ pub fn n_to_value(
                         }))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::Int64Array(proto::Int64Array {
                 values: vec![(n % 128) as i64],
@@ -675,7 +676,7 @@ pub fn n_to_value(
                         }))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::Uint32Array(proto::Uint32Array {
                 values: vec![(n % 128) as u32],
@@ -709,7 +710,7 @@ pub fn n_to_value(
                         }))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::Uint32Array(proto::Uint32Array {
                 values: vec![(n % 128) as u32],
@@ -743,7 +744,7 @@ pub fn n_to_value(
                         }))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::Uint32Array(proto::Uint32Array {
                 values: vec![(n % 128) as u32],
@@ -777,7 +778,7 @@ pub fn n_to_value(
                         }))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::Uint64Array(proto::Uint64Array {
                 values: vec![(n % 128)],
@@ -811,7 +812,7 @@ pub fn n_to_value(
                         }))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::FloatArray(proto::FloatArray {
                 values: vec![(n % 128) as f32],
@@ -845,14 +846,14 @@ pub fn n_to_value(
                         }))
                     }
                 }
-                _ => Err(PublishError::MetadataError),
+                _ => Err(TriggerError::MetadataError),
             },
             None => Ok(proto::datapoint::Value::DoubleArray(proto::DoubleArray {
                 values: vec![(n % 128) as f64],
             })),
         },
-        Ok(proto::DataType::Timestamp) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::TimestampArray) => Err(PublishError::DataTypeError),
-        Err(_) => Err(PublishError::Shutdown),
+        Ok(proto::DataType::Timestamp) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::TimestampArray) => Err(TriggerError::DataTypeError),
+        Err(_) => Err(TriggerError::Shutdown),
     }
 }

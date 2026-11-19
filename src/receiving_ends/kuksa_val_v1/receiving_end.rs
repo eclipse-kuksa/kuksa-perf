@@ -1,20 +1,20 @@
 /********************************************************************************
-* Copyright (c) 2024 Contributors to the Eclipse Foundation
-*
-* See the NOTICE file(s) distributed with this work for additional
-* information regarding copyright ownership.
-*
-* This program and the accompanying materials are made available under the
-* terms of the Apache License 2.0 which is available at
-* http://www.apache.org/licenses/LICENSE-2.0
-*
-* SPDX-License-Identifier: Apache-2.0
-********************************************************************************/
+ * Copyright (c) 2024 Contributors to the Eclipse Foundation
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information regarding copyright ownership.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License 2.0 which is available at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ********************************************************************************/
 
 use databroker_proto::kuksa::val::v1 as kuksa_val_v1;
 use std::{collections::HashMap, sync::Arc};
 
-use crate::subscribers::subscriber_trait::{Error, SubscriberInterface};
+use crate::receiving_ends::receiving_end_trait::{Error, ReceivingEndInterface};
 
 use log::info;
 use tokio::{
@@ -27,11 +27,11 @@ use crate::config::Signal;
 
 use crate::types::DataValue;
 
-pub struct Subscriber {
+pub struct ReceivingEnd {
     signals: Arc<HashMap<String, Sender<Instant>>>,
 }
 
-impl Subscriber {
+impl ReceivingEnd {
     pub async fn new(
         channel: Channel,
         signals: Vec<Signal>,
@@ -44,7 +44,7 @@ impl Subscriber {
             },
         )));
 
-        Subscriber::start(channel, signals, signals_c.clone(), initial_values_sender).await?;
+        ReceivingEnd::start(channel, signals, signals_c.clone(), initial_values_sender).await?;
 
         Ok(Self { signals: signals_c })
     }
@@ -140,8 +140,8 @@ impl Subscriber {
 }
 
 #[async_trait]
-impl SubscriberInterface for Subscriber {
-    async fn wait_for(&self, signal: &Signal) -> Result<Receiver<Instant>, Error> {
+impl ReceivingEndInterface for ReceivingEnd {
+    async fn get_receiver(&self, signal: &Signal) -> Result<Receiver<Instant>, Error> {
         match self.signals.get(&signal.path) {
             Some(sender) => Ok(sender.subscribe()),
             None => Err(Error::SignalNotFound(signal.path.to_string())),

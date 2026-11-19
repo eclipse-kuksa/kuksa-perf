@@ -1,26 +1,29 @@
 /********************************************************************************
-* Copyright (c) 2024 Contributors to the Eclipse Foundation
-*
-* See the NOTICE file(s) distributed with this work for additional
-* information regarding copyright ownership.
-*
-* This program and the accompanying materials are made available under the
-* terms of the Apache License 2.0 which is available at
-* http://www.apache.org/licenses/LICENSE-2.0
-*
-* SPDX-License-Identifier: Apache-2.0
-********************************************************************************/
+ * Copyright (c) 2024 Contributors to the Eclipse Foundation
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information regarding copyright ownership.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Apache License 2.0 which is available at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ ********************************************************************************/
 
 use crate::config::Signal;
-use crate::providers::provider_trait::{Error, ProviderInterface, PublishError};
+use crate::measure::Operation;
+use crate::triggering_ends::triggering_end_trait::{Error, TriggerError, TriggeringEndInterface};
 use crate::types::DataValue;
 
 use databroker_proto::kuksa::val::v2::{
     self as proto, open_provider_stream_request,
     open_provider_stream_response::Action::{
-        BatchActuateStreamRequest, ProvideActuationResponse, PublishValuesResponse,
+        BatchActuateStreamRequest, GetProviderValueRequest, ProvideActuationResponse,
+        ProvideSignalResponse, PublishValuesResponse, UpdateFilterRequest,
     },
 };
+use databroker_proto::kuksa::val::v2::{OpenProviderStreamRequest, SampleInterval};
 
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -37,29 +40,49 @@ use tonic::transport::Channel;
 
 use std::collections::HashMap;
 
-pub struct Provider {
+pub struct TriggeringEnd {
     tx: Sender<proto::OpenProviderStreamRequest>,
     metadata: HashMap<String, proto::Metadata>,
     id_to_path: HashMap<i32, String>,
     channel: Channel,
     initial_signals_values: HashMap<Signal, DataValue>,
+    operation: Operation,
 }
 
-impl Provider {
-    pub fn new(channel: Channel) -> Result<Self, Error> {
+fn build_registration_signal_request(signals: Vec<i32>) -> OpenProviderStreamRequest {
+    proto::OpenProviderStreamRequest {
+        action: Some(open_provider_stream_request::Action::ProvideSignalRequest(
+            proto::ProvideSignalRequest {
+                signals_sample_intervals: signals
+                    .iter()
+                    .map(|signal_id| (*signal_id, SampleInterval { interval_ms: 1 }))
+                    .collect(),
+            },
+        )),
+    }
+}
+
+impl TriggeringEnd {
+    pub fn new(channel: Channel, operation: &Operation) -> Result<Self, Error> {
         let (tx, rx) = mpsc::channel(10);
 
-        tokio::spawn(Provider::run(rx, channel.clone()));
-        Ok(Provider {
+        match operation {
+            Operation::StreamingPublish => {
+                tokio::spawn(TriggeringEnd::open_provider_stream(rx, channel.clone()));
+            }
+            Operation::Actuate => (),
+        }
+        Ok(TriggeringEnd {
             tx,
             metadata: HashMap::new(),
             id_to_path: HashMap::new(),
             channel,
             initial_signals_values: HashMap::new(),
+            operation: operation.clone(),
         })
     }
 
-    async fn run(
+    async fn open_provider_stream(
         rx: Receiver<proto::OpenProviderStreamRequest>,
         channel: Channel,
     ) -> Result<(), Error> {
@@ -79,13 +102,16 @@ impl Provider {
                                             "Singal id: {} | error setting datapoint {}",
                                             id, value.message
                                         );
-                                        return Err::<(), Error>(Error::PublishError(
-                                            PublishError::SendFailure(value.message.clone()),
+                                        return Err::<(), Error>(Error::TriggerError(
+                                            TriggerError::SendFailure(value.message.clone()),
                                         ));
                                     }
                                 }
                             }
                             Some(BatchActuateStreamRequest(_)) => {}
+                            Some(ProvideSignalResponse(_)) => {}
+                            Some(UpdateFilterRequest(_)) => {}
+                            Some(GetProviderValueRequest(_)) => {}
                             None => {}
                         }
                     }
@@ -103,64 +129,107 @@ impl Provider {
 }
 
 #[async_trait]
-impl ProviderInterface for Provider {
-    async fn publish(
+impl TriggeringEndInterface for TriggeringEnd {
+    async fn trigger(
         &self,
         signal_data: &[Signal],
         iteration: u64,
-    ) -> Result<Instant, PublishError> {
-        let datapoints = if iteration == 0 {
-            HashMap::from_iter(signal_data.iter().map(|signal: &Signal| {
-                let metadata = self.metadata.get(&signal.path).unwrap();
-                let mut new_value = n_to_value(metadata.clone(), iteration).unwrap();
-                if let Some(value) = self.initial_signals_values.get(signal) {
-                    if DataValue::from(&Some(new_value.clone())) == *value {
-                        new_value = n_to_value(metadata.clone(), iteration + 1).unwrap();
-                    }
+    ) -> Result<Instant, TriggerError> {
+        match self.operation {
+            Operation::StreamingPublish => {
+                let data_points = if iteration == 0 {
+                    HashMap::from_iter(signal_data.iter().map(|signal: &Signal| {
+                        let metadata = self.metadata.get(&signal.path).unwrap();
+                        let mut new_value = n_to_value(metadata.clone(), iteration).unwrap();
+                        if let Some(value) = self.initial_signals_values.get(signal) {
+                            if DataValue::from(&Some(new_value.clone())) == *value {
+                                new_value = n_to_value(metadata.clone(), iteration + 1).unwrap();
+                            }
+                        }
+                        (
+                            metadata.id,
+                            proto::Datapoint {
+                                timestamp: None,
+                                value: Some(new_value),
+                            },
+                        )
+                    }))
+                } else {
+                    HashMap::from_iter(signal_data.iter().map(|path: &Signal| {
+                        let metadata = self.metadata.get(&path.path).unwrap();
+                        (
+                            metadata.id,
+                            proto::Datapoint {
+                                timestamp: None,
+                                value: Some(n_to_value(metadata.clone(), iteration + 1).unwrap()),
+                            },
+                        )
+                    }))
+                };
+
+                let payload = proto::OpenProviderStreamRequest {
+                    action: Some(open_provider_stream_request::Action::PublishValuesRequest(
+                        proto::PublishValuesRequest {
+                            request_id: 1_u32,
+                            data_points,
+                        },
+                    )),
+                };
+
+                let now = Instant::now();
+                self.tx
+                    .send(payload)
+                    .await
+                    .map_err(|err| TriggerError::SendFailure(err.to_string()))?;
+                Ok(now)
+            }
+            Operation::Actuate => {
+                let actuate_requests = if iteration == 0 {
+                    Vec::from_iter(signal_data.iter().map(|signal: &Signal| {
+                        let metadata = self.metadata.get(&signal.path).unwrap();
+                        let mut new_value = n_to_value(metadata.clone(), iteration).unwrap();
+                        if let Some(value) = self.initial_signals_values.get(signal) {
+                            if DataValue::from(&Some(new_value.clone())) == *value {
+                                new_value = n_to_value(metadata.clone(), iteration + 1).unwrap();
+                            }
+                        }
+                        proto::ActuateRequest {
+                            signal_id: Some(proto::SignalId {
+                                signal: Some(proto::signal_id::Signal::Id(metadata.id)),
+                            }),
+                            value: Some(new_value),
+                        }
+                    }))
+                } else {
+                    Vec::from_iter(signal_data.iter().map(|path: &Signal| {
+                        let metadata = self.metadata.get(&path.path).unwrap();
+                        proto::ActuateRequest {
+                            signal_id: Some(proto::SignalId {
+                                signal: Some(proto::signal_id::Signal::Id(metadata.id)),
+                            }),
+                            value: Some(n_to_value(metadata.clone(), iteration + 1).unwrap()),
+                        }
+                    }))
+                };
+
+                let mut client = proto::val_client::ValClient::new(self.channel.clone());
+                let message = proto::BatchActuateRequest { actuate_requests };
+
+                let now = Instant::now();
+                match client.batch_actuate(tonic::Request::new(message)).await {
+                    Ok(_) => Ok(now),
+                    Err(err) => Err(TriggerError::SendFailure(err.to_string())),
                 }
-                (
-                    metadata.id,
-                    proto::Datapoint {
-                        timestamp: None,
-                        value: Some(new_value),
-                    },
-                )
-            }))
-        } else {
-            HashMap::from_iter(signal_data.iter().map(|path: &Signal| {
-                let metadata = self.metadata.get(&path.path).unwrap();
-                (
-                    metadata.id,
-                    proto::Datapoint {
-                        timestamp: None,
-                        value: Some(n_to_value(metadata.clone(), iteration + 1).unwrap()),
-                    },
-                )
-            }))
-        };
-
-        let payload = proto::OpenProviderStreamRequest {
-            action: Some(open_provider_stream_request::Action::PublishValuesRequest(
-                proto::PublishValuesRequest {
-                    request_id: 1_i32,
-                    datapoints,
-                },
-            )),
-        };
-
-        let now = Instant::now();
-        self.tx
-            .send(payload)
-            .await
-            .map_err(|err| PublishError::SendFailure(err.to_string()))?;
-        Ok(now)
+            }
+        }
     }
 
     async fn validate_signals_metadata(
         &mut self,
         signals: &[Signal],
+        operation: &Operation,
     ) -> Result<Vec<Signal>, Error> {
-        let signals: Vec<String> = signals.iter().map(|signal| signal.path.clone()).collect();
+        let signals_vec: Vec<String> = signals.iter().map(|signal| signal.path.clone()).collect();
         let number_of_signals = signals.len();
 
         let mut client: proto::val_client::ValClient<Channel> =
@@ -168,9 +237,9 @@ impl ProviderInterface for Provider {
                 .max_decoding_message_size(64 * 1024 * 1024)
                 .max_encoding_message_size(64 * 1024 * 1024);
 
-        let mut signals_response = Vec::with_capacity(signals.len());
+        let mut signals_response = Vec::with_capacity(signals_vec.len());
 
-        let requests_entries: Vec<proto::ListMetadataRequest> = signals
+        let requests_entries: Vec<proto::ListMetadataRequest> = signals_vec
             .iter()
             .map(|path| proto::ListMetadataRequest {
                 root: path.to_string(),
@@ -184,6 +253,13 @@ impl ProviderInterface for Provider {
             match response {
                 Ok(entries) => {
                     for metadata in entries.into_inner().metadata.iter() {
+                        if metadata.entry_type == proto::EntryType::Sensor as i32
+                            && *operation == Operation::Actuate
+                        {
+                            return Err(Error::TriggerError(TriggerError::NoActuator(
+                                signal_path.clone(),
+                            )));
+                        }
                         self.metadata.insert(signal_path.clone(), metadata.clone());
                         self.id_to_path.insert(metadata.id, signal_path.clone());
                         signals_response.push(Signal {
@@ -194,7 +270,7 @@ impl ProviderInterface for Provider {
                 }
                 Err(status) => {
                     // Handle the Err case without returning a value
-                    eprintln!("gRPC call failed with status: {:?}", status);
+                    eprintln!("gRPC call failed with status: {status:?}");
                 }
             }
         }
@@ -204,16 +280,23 @@ impl ProviderInterface for Provider {
             self.metadata.len()
         );
         if self.metadata.len() < number_of_signals {
-            let missing_signals: Vec<_> = signals
+            let missing_signals: Vec<_> = signals_vec
                 .iter()
                 .filter(|signal| !self.metadata.contains_key(signal.as_str()))
                 .collect();
 
             Err(Error::MetadataError(format!(
-                "The following signals are missing in the databroker: {:?}",
-                missing_signals
+                "The following signals are missing in the databroker: {missing_signals:?}"
             )))
         } else {
+            //Register signals after validation
+            let _ = self
+                .tx
+                .send(build_registration_signal_request(
+                    self.id_to_path.keys().cloned().collect(),
+                ))
+                .await;
+
             Ok(signals_response)
         }
     }
@@ -227,11 +310,10 @@ impl ProviderInterface for Provider {
     }
 }
 
-pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, PublishError> {
+pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, TriggerError> {
     match proto::DataType::try_from(metadata.data_type) {
         Ok(proto::DataType::String) => {
-            if metadata.allowed_values.is_some() {
-                let allowed = metadata.allowed_values.unwrap();
+            if let Some(allowed) = metadata.allowed_values {
                 if let Some(proto::value::TypedValue::StringArray(values)) = allowed.typed_value {
                     let index = n % values.values.len() as u64;
                     let value = values.values[index as usize].clone();
@@ -239,7 +321,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::String(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -247,7 +329,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                 })
             }
         }
-        Ok(proto::DataType::Unspecified) => Err(PublishError::Shutdown),
+        Ok(proto::DataType::Unspecified) => Err(TriggerError::Shutdown),
         Ok(proto::DataType::Boolean) => match n % 2 {
             0 => Ok(proto::Value {
                 typed_value: Some(proto::value::TypedValue::Bool(true)),
@@ -299,7 +381,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Int32(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -350,7 +432,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Int32(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -401,7 +483,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Int32(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -452,7 +534,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Int64(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -503,7 +585,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Uint32(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -554,7 +636,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Uint32(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -605,7 +687,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Uint32(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -656,7 +738,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Uint64(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -707,7 +789,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Float(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -758,7 +840,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         typed_value: Some(proto::value::TypedValue::Double(value)),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -767,8 +849,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
             }
         }
         Ok(proto::DataType::StringArray) => {
-            if metadata.allowed_values.is_some() {
-                let allowed = metadata.allowed_values.unwrap();
+            if let Some(allowed) = metadata.allowed_values {
                 if let Some(proto::value::TypedValue::StringArray(values)) = allowed.typed_value {
                     let index = n % values.values.len() as u64;
                     let value = values.values[index as usize].clone();
@@ -780,7 +861,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         )),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -791,8 +872,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
             }
         }
         Ok(proto::DataType::Uint8Array) => {
-            if metadata.allowed_values.is_some() {
-                let allowed = metadata.allowed_values.unwrap();
+            if let Some(allowed) = metadata.allowed_values {
                 if let Some(proto::value::TypedValue::Uint32Array(values)) = allowed.typed_value {
                     let index = n % values.values.len() as u64;
                     let value = values.values[index as usize];
@@ -804,7 +884,7 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                         )),
                     })
                 } else {
-                    Err(PublishError::DataTypeError)
+                    Err(TriggerError::DataTypeError)
                 }
             } else {
                 Ok(proto::Value {
@@ -814,19 +894,18 @@ pub fn n_to_value(metadata: proto::Metadata, n: u64) -> Result<proto::Value, Pub
                 })
             }
         }
-        Ok(proto::DataType::BooleanArray) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::Int8Array) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::Int16Array) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::Int32Array) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::Int64Array) => Err(PublishError::DataTypeError),
-        //Ok(proto::DataType::Uint8Array) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::Uint16Array) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::Uint32Array) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::Uint64Array) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::FloatArray) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::DoubleArray) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::Timestamp) => Err(PublishError::DataTypeError),
-        Ok(proto::DataType::TimestampArray) => Err(PublishError::DataTypeError),
-        Err(_) => Err(PublishError::MetadataError),
+        Ok(proto::DataType::BooleanArray) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::Int8Array) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::Int16Array) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::Int32Array) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::Int64Array) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::Uint16Array) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::Uint32Array) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::Uint64Array) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::FloatArray) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::DoubleArray) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::Timestamp) => Err(TriggerError::DataTypeError),
+        Ok(proto::DataType::TimestampArray) => Err(TriggerError::DataTypeError),
+        Err(_) => Err(TriggerError::MetadataError),
     }
 }
